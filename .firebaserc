@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "cheq-fest-dev",
+    "dev": "cheq-fest-dev",
+    "prod": "cheq-fest-prod"
+  }
+}

@@ -1,0 +1,25 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Public read on event/player assets. Admin writes only.
+    match /events/{eventId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.token.admin == true;
+    }
+    match /players/{uid}/{allPaths=**} {
+      allow read: if true;
+      // Admin or the user themselves can write their avatar.
+      allow write: if request.auth != null
+                   && (request.auth.token.admin == true || request.auth.uid == uid);
+    }
+    // Admin-uploaded rulebook PDFs. The parseRulebook Cloud Function reads
+    // these via Admin SDK (bypasses these rules), so we only need to gate
+    // the client upload. Public read so the Rulebook screen can link to the PDF.
+    match /rulebooks/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && (request.auth.token.admin == true || request.auth.token.superAdmin == true);
+    }
+  }
+}

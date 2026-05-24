@@ -1,0 +1,6 @@
+node_modules
+lib
+
+# Service-account keys must never be committed.
+service-account.json
+*-service-account.json

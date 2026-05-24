@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0a0a0a"/>
+  <text x="256" y="220" font-family="Anton, Impact, sans-serif" font-size="200"
+        font-weight="700" text-anchor="middle" fill="#f5f1e8" letter-spacing="6">CHEQ</text>
+  <text x="256" y="360" font-family="Anton, Impact, sans-serif" font-size="120"
+        font-weight="700" text-anchor="middle" fill="#ff4a1c" letter-spacing="4">FEST</text>
+  <rect x="120" y="400" width="272" height="6" fill="#e8ff4a"/>
+</svg>

@@ -1,0 +1,3869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0a0a" />
+<title>CHEQ Fest — Sports Arena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=JetBrains+Mono:wght@400;700&family=Anton&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --bg-card: #141414;
+    --bg-elev: #1c1c1c;
+    --ink: #f5f1e8;
+    --ink-dim: #8a8780;
+    --ink-mute: #4a4742;
+    --accent: #ff4a1c;       /* lava orange */
+    --accent-2: #e8ff4a;     /* electric lime */
+    --accent-3: #4ad4ff;     /* signal cyan */
+    --accent-4: #ff4ad0;     /* hot pink */
+    --line: #2a2724;
+    --gold: #f5c542;
+    --silver: #c8c2b8;
+    --bronze: #c47a3d;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { overflow-x: hidden; }
+  body {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    line-height: 1.4;
+    overscroll-behavior: none;
+  }
+
+  /* PHONE FRAME — desktop only */
+  .phone-stage {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(255,74,28,0.12), transparent 50%),
+      radial-gradient(ellipse at 70% 80%, rgba(74,212,255,0.08), transparent 50%),
+      var(--bg);
+  }
+  .phone {
+    width: 100%;
+    max-width: 420px;
+    height: min(900px, calc(100vh - 48px));
+    background: var(--bg);
+    border-radius: 44px;
+    box-shadow:
+      0 0 0 12px #1a1815,
+      0 0 0 13px #2a2724,
+      0 40px 80px rgba(0,0,0,0.6),
+      0 0 120px rgba(255,74,28,0.15);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  /* Notch */
+  .phone::before {
+    content: '';
+    position: absolute;
+    top: 12px; left: 50%;
+    transform: translateX(-50%);
+    width: 110px; height: 28px;
+    background: #000;
+    border-radius: 20px;
+    z-index: 1000;
+    pointer-events: none;
+  }
+
+  @media (max-width: 768px) {
+    .phone-stage { padding: 0; min-height: 100vh; }
+    .phone { max-width: 100%; height: 100vh; border-radius: 0; box-shadow: none; }
+    .phone::before { display: none; }
+  }
+
+  /* APP SCAFFOLD */
+  .app {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .topbar {
+    padding: 48px 20px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(180deg, var(--bg) 70%, transparent);
+    position: relative;
+    z-index: 10;
+  }
+  @media (max-width: 768px) {
+    .topbar { padding: 56px 20px 14px; }
+  }
+  .topbar-title {
+    font-family: 'Anton', sans-serif;
+    font-size: 22px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .topbar-title .dot { color: var(--accent); }
+  .topbar-actions { display: flex; gap: 8px; }
+  .icon-btn {
+    width: 36px; height: 36px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--bg-card);
+    color: var(--ink);
+    display: grid; place-items: center;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .icon-btn:active { transform: scale(0.92); }
+  .icon-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+
+  .screen-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-bottom: 100px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .screen-scroll::-webkit-scrollbar { width: 0; }
+
+  /* BOTTOM NAV */
+  .tabbar {
+    position: absolute;
+    bottom: 12px; left: 12px; right: 12px;
+    background: rgba(20,20,20,0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    padding: 8px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+    z-index: 100;
+  }
+  .tab {
+    border: none;
+    background: transparent;
+    color: var(--ink-dim);
+    padding: 10px 4px;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.18s;
+    font-family: inherit;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .tab svg { width: 20px; height: 20px; }
+  .tab.active { color: var(--accent); background: rgba(255,74,28,0.12); }
+  .tab:active { transform: scale(0.9); }
+
+  /* SHARED COMPONENTS */
+  .section-title {
+    font-family: 'Anton', sans-serif;
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    padding: 0 20px;
+    margin: 24px 0 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-title::before {
+    content: '';
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+  }
+  .section-title .more {
+    margin-left: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    text-decoration: none;
+    letter-spacing: 0.04em;
+  }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 16px;
+    margin: 0 20px 12px;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .chip.live { background: var(--accent); color: #000; }
+  .chip.live::before {
+    content: ''; width: 6px; height: 6px;
+    background: #000; border-radius: 50%;
+    animation: pulse 1.2s infinite;
+  }
+  .chip.upcoming { background: rgba(74,212,255,0.15); color: var(--accent-3); border: 1px solid rgba(74,212,255,0.3); }
+  .chip.done { background: rgba(138,135,128,0.12); color: var(--ink-dim); border: 1px solid var(--line); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ====== SCREEN: HOME ====== */
+  .hero {
+    margin: 0 20px;
+    padding: 24px;
+    border-radius: 28px;
+    background:
+      radial-gradient(ellipse at top right, rgba(232,255,74,0.15), transparent 50%),
+      linear-gradient(135deg, #1a1815 0%, #0f0e0c 100%);
+    border: 1px solid var(--line);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '24';
+    position: absolute;
+    right: -20px; top: -30px;
+    font-family: 'Anton', sans-serif;
+    font-size: 200px;
+    color: rgba(255,74,28,0.06);
+    line-height: 1;
+    pointer-events: none;
+  }
+  .hero-kicker {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .hero-title {
+    font-family: 'Anton', sans-serif;
+    font-size: 44px;
+    line-height: 0.9;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .hero-title span { color: var(--accent); }
+  .hero-meta {
+    color: var(--ink-dim);
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 16px;
+    position: relative;
+    z-index: 1;
+  }
+  .stat {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 10px;
+  }
+  .stat-val {
+    font-family: 'Anton', sans-serif;
+    font-size: 22px;
+    color: var(--accent-2);
+  }
+  .stat-lbl {
+    font-size: 10px;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 2px;
+  }
+
+  /* LIVE MATCHES STRIP */
+  .live-strip {
+    display: flex;
+    gap: 12px;
+    padding: 0 20px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+  .live-strip::-webkit-scrollbar { display: none; }
+  .match-card {
+    min-width: 260px;
+    scroll-snap-align: start;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 14px;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .match-card.live { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .match-sport {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .match-teams { display: flex; justify-content: space-between; align-items: center; }
+  .team-block { text-align: center; flex: 1; }
+  .team-flag {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    margin: 0 auto 6px;
+    display: grid; place-items: center;
+    font-family: 'Anton', sans-serif;
+    font-size: 16px;
+    color: #000;
+  }
+  .team-name {
+    font-size: 11px;
+    color: var(--ink);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .team-score {
+    font-family: 'Anton', sans-serif;
+    font-size: 26px;
+    color: var(--accent-2);
+    line-height: 1;
+    margin-top: 4px;
+  }
+  .vs {
+    font-family: 'Anton', sans-serif;
+    color: var(--ink-mute);
+    font-size: 12px;
+    padding: 0 8px;
+  }
+
+  /* LEADERBOARD ROWS */
+  .lb-row {
+    display: grid;
+    grid-template-columns: 32px 44px 1fr auto auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    margin: 0 20px 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .lb-row:active { transform: scale(0.98); }
+  .lb-row.rank-1 { background: linear-gradient(135deg, rgba(245,197,66,0.15), var(--bg-card)); border-color: rgba(245,197,66,0.4); }
+  .lb-row.rank-2 { background: linear-gradient(135deg, rgba(200,194,184,0.1), var(--bg-card)); border-color: rgba(200,194,184,0.3); }
+  .lb-row.rank-3 { background: linear-gradient(135deg, rgba(196,122,61,0.1), var(--bg-card)); border-color: rgba(196,122,61,0.3); }
+  .lb-rank {
+    font-family: 'Anton', sans-serif;
+    font-size: 22px;
+    text-align: center;
+    color: var(--ink-mute);
+  }
+  .rank-1 .lb-rank { color: var(--gold); }
+  .rank-2 .lb-rank { color: var(--silver); }
+  .rank-3 .lb-rank { color: var(--bronze); }
+  .lb-flag {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    display: grid; place-items: center;
+    font-family: 'Anton', sans-serif;
+    font-size: 16px;
+    color: #000;
+  }
+  .lb-name {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 13px;
+  }
+  .lb-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    margin-top: 2px;
+  }
+  .lb-trend {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 8px;
+    background: rgba(232,255,74,0.1);
+    color: var(--accent-2);
+  }
+  .lb-trend.down { background: rgba(255,74,28,0.1); color: var(--accent); }
+  .lb-points {
+    font-family: 'Anton', sans-serif;
+    font-size: 22px;
+    color: var(--ink);
+  }
+
+  /* ====== ARENA SCREEN ====== */
+  .arena-header {
+    padding: 0 20px;
+    margin-bottom: 16px;
+  }
+  .arena-title {
+    font-family: 'Anton', sans-serif;
+    font-size: 32px;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .arena-meta {
+    color: var(--ink-dim);
+    font-size: 12px;
+    margin-top: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.04em;
+  }
+  .sport-picker {
+    display: flex;
+    gap: 8px;
+    padding: 0 20px 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sport-picker::-webkit-scrollbar { display: none; }
+  .sport-pill {
+    padding: 10px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-dim);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .sport-pill.active { background: var(--accent-2); color: #000; border-color: var(--accent-2); }
+
+  .arena-wrap {
+    margin: 0 20px 16px;
+    background: linear-gradient(180deg, #0d2818 0%, #082010 100%);
+    border-radius: 24px;
+    padding: 20px 16px;
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 3 / 4;
+  }
+  .arena-wrap::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 14px, rgba(255,255,255,0.025) 14px, rgba(255,255,255,0.025) 28px);
+    pointer-events: none;
+  }
+  .arena-score-strip {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 12px;
+    position: relative; z-index: 2;
+  }
+  .arena-team {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'Anton', sans-serif;
+    font-size: 18px;
+  }
+  .arena-team .dot {
+    width: 12px; height: 12px; border-radius: 50%;
+  }
+  .arena-vs {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+  }
+
+  /* Animated faces on field */
+  .field {
+    position: absolute;
+    inset: 60px 16px 16px;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-radius: 12px;
+  }
+  .field::before {
+    /* center line */
+    content: '';
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 2px;
+    background: rgba(255,255,255,0.2);
+  }
+  .field::after {
+    /* center circle */
+    content: '';
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 60px; height: 60px;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .player {
+    position: absolute;
+    width: 38px; height: 38px;
+    transform: translate(-50%, -50%);
+    animation: bob 3s ease-in-out infinite;
+  }
+  .player .face {
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #000;
+    display: grid; place-items: center;
+    font-family: 'Anton', sans-serif;
+    font-size: 11px;
+    color: #000;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.4);
+    position: relative;
+  }
+  .player.t2 .face { background: var(--accent-3); }
+  .player .nameplate {
+    position: absolute;
+    top: -16px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7);
+    color: var(--ink);
+    font-size: 8px;
+    padding: 2px 5px;
+    border-radius: 4px;
+    white-space: nowrap;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .ball {
+    position: absolute;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid #000;
+    box-shadow: 0 0 12px rgba(255,255,255,0.4);
+    animation: ballMove 6s ease-in-out infinite;
+    transform: translate(-50%, -50%);
+  }
+
+  @keyframes bob {
+    0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+    50% { transform: translate(-50%, -50%) translateY(-3px); }
+  }
+  @keyframes ballMove {
+    0%   { top: 50%; left: 50%; }
+    20%  { top: 30%; left: 70%; }
+    40%  { top: 70%; left: 35%; }
+    60%  { top: 25%; left: 25%; }
+    80%  { top: 65%; left: 80%; }
+    100% { top: 50%; left: 50%; }
+  }
+
+  /* LOGIN SCREEN */
+  .login-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 40px 24px;
+    background:
+      radial-gradient(ellipse at top, rgba(255,74,28,0.2), transparent 50%),
+      var(--bg);
+    position: relative;
+  }
+  .login-logo {
+    font-family: 'Anton', sans-serif;
+    font-size: 64px;
+    line-height: 0.9;
+    text-transform: uppercase;
+    margin-top: 60px;
+    letter-spacing: 0.01em;
+  }
+  .login-logo span { color: var(--accent); }
+  .login-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-dim);
+    letter-spacing: 0.2em;
+    margin-top: 16px;
+    text-transform: uppercase;
+  }
+  .login-content { flex: 1; }
+  .login-body {
+    margin-top: auto;
+    padding: 28px 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+  }
+  .login-body h2 {
+    font-family: 'Anton', sans-serif;
+    font-size: 24px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .login-body p {
+    color: var(--ink-dim);
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+  .gbtn {
+    width: 100%;
+    padding: 16px;
+    background: var(--ink);
+    color: #000;
+    border: none;
+    border-radius: 14px;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    transition: all 0.15s;
+  }
+  .gbtn:active { transform: scale(0.97); }
+  .guest-link {
+    display: block;
+    text-align: center;
+    margin-top: 16px;
+    color: var(--ink-dim);
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+  }
+  .guest-link u { color: var(--accent-2); }
+  .domain-note {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: rgba(255,74,28,0.08);
+    border: 1px solid rgba(255,74,28,0.3);
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+  }
+
+  /* TEAM DETAIL */
+  .team-hero {
+    margin: 0 20px;
+    padding: 24px;
+    border-radius: 24px;
+    color: #000;
+    position: relative;
+    overflow: hidden;
+  }
+  .team-hero-rank {
+    font-family: 'Anton', sans-serif;
+    font-size: 96px;
+    line-height: 1;
+    position: absolute;
+    right: 16px; top: 8px;
+    opacity: 0.2;
+  }
+  .team-hero-name {
+    font-family: 'Anton', sans-serif;
+    font-size: 36px;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .team-hero-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    margin-top: 8px;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+  }
+  .roster-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    padding: 0 20px;
+  }
+  .player-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .player-tile .avatar {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: var(--bg-elev);
+    border: 2px solid var(--line);
+    display: grid; place-items: center;
+    font-family: 'Anton', sans-serif;
+    font-size: 18px;
+    color: var(--accent-2);
+  }
+  .player-tile.captain .avatar { border-color: var(--gold); background: rgba(245,197,66,0.1); color: var(--gold); }
+  .player-tile.sport-cap .avatar { border-color: var(--accent-3); background: rgba(74,212,255,0.1); color: var(--accent-3); }
+
+  /* Team-colored player tiles — kept identical to arena player colors so user can match instantly */
+  .player-tile.team-t1 .avatar { background: var(--accent); color: #000; border-color: var(--accent); font-family: 'Anton', sans-serif; }
+  .player-tile.team-t2 .avatar { background: var(--accent-3); color: #000; border-color: var(--accent-3); font-family: 'Anton', sans-serif; }
+  .player-tile.team-t3 .avatar { background: var(--accent-2); color: #000; border-color: var(--accent-2); font-family: 'Anton', sans-serif; }
+  .player-tile.team-t4 .avatar { background: var(--accent-4); color: #000; border-color: var(--accent-4); font-family: 'Anton', sans-serif; }
+
+  /* Captain "C" flag — same shape on arena face AND roster tile so eye matches them */
+  .player-tile .avatar { position: relative; }
+  .player-tile.is-captain .avatar::after,
+  .player .face.is-captain::after {
+    content: 'C';
+    position: absolute;
+    top: -4px; right: -4px;
+    width: 18px; height: 18px;
+    background: var(--gold);
+    color: #000;
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+    font-family: 'Anton', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    display: grid; place-items: center;
+    line-height: 1;
+    z-index: 3;
+  }
+  .player .face.is-captain::after {
+    width: 14px; height: 14px;
+    font-size: 9px;
+    top: -3px; right: -3px;
+    border-width: 1.5px;
+  }
+
+  /* Avatar source priority (production): admin-uploaded photo → Google profile photo → initials.
+     Use .avatar[data-photo] with background-image set on attach; falls back to initials text below. */
+  .player-tile .avatar[data-photo],
+  .player .face[data-photo] {
+    background-size: cover;
+    background-position: center;
+    color: transparent;
+  }
+  .player-tile .pname {
+    font-size: 10px;
+    text-align: center;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+  }
+  .player-tile .role {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+  }
+
+  /* ADMIN — Event Setup */
+  .form-group { margin: 0 20px 14px; }
+  .form-label {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-dim);
+    margin-bottom: 6px;
+  }
+  .input, .select {
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    border-radius: 14px;
+    font-family: inherit;
+    font-size: 14px;
+  }
+  .input:focus, .select:focus { outline: none; border-color: var(--accent); }
+  .tag-input {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    min-height: 48px;
+  }
+  .tag {
+    padding: 5px 10px;
+    background: var(--accent);
+    color: #000;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .tag.t2 { background: var(--accent-2); }
+  .tag.t3 { background: var(--accent-3); }
+  .tag.t4 { background: var(--accent-4); }
+  .tag .x { cursor: pointer; opacity: 0.6; }
+  .tag-add {
+    background: transparent;
+    border: 1px dashed var(--line);
+    color: var(--ink-dim);
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .upload-zone {
+    margin: 0 20px;
+    padding: 24px;
+    border: 2px dashed var(--line);
+    border-radius: 16px;
+    text-align: center;
+    color: var(--ink-dim);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .upload-zone svg { margin: 0 auto 8px; }
+  .upload-zone.has-file { border-color: var(--accent-2); border-style: solid; color: var(--accent-2); }
+
+  .points-table { margin: 0 20px; }
+  .points-row {
+    display: grid;
+    grid-template-columns: 1fr 60px 60px 60px;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    margin-bottom: 6px;
+  }
+  .points-row.header {
+    background: transparent; border: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 4px 12px;
+  }
+  .points-row input {
+    width: 100%; padding: 6px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    text-align: center;
+  }
+  .points-row .sport-cell {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+  }
+
+  .primary-btn {
+    display: block;
+    width: calc(100% - 40px);
+    margin: 20px;
+    padding: 16px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 16px;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+  }
+  .primary-btn:active { transform: scale(0.98); }
+  .ghost-btn {
+    display: block;
+    width: calc(100% - 40px);
+    margin: 0 20px 12px;
+    padding: 14px;
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+  }
+
+  /* ROSTER EDITOR (Sport Captain) — 4-bucket drag system */
+  .lineup-section {
+    margin: 0 20px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 14px;
+    transition: all 0.18s;
+  }
+  .lineup-section.bucket-pitch { border-color: rgba(232,255,74,0.4); background: linear-gradient(180deg, rgba(232,255,74,0.06), var(--bg-card)); }
+  .lineup-section.bucket-tent  { border-color: rgba(74,212,255,0.3); }
+  .lineup-section.bucket-sub   { }
+  .lineup-section.bucket-out   { background: rgba(255,255,255,0.02); }
+  .lineup-section.drag-over    { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(255,74,28,0.3); transform: scale(1.005); }
+
+  .lineup-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+  }
+  .lineup-name {
+    font-family: 'Anton', sans-serif;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .lineup-name .marker {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .lineup-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 8px;
+    letter-spacing: 0.06em;
+  }
+  .lineup-count.final { background: rgba(232,255,74,0.15); color: var(--accent-2); }
+  .lineup-count.tent  { background: rgba(74,212,255,0.15); color: var(--accent-3); }
+  .lineup-count.sub   { background: rgba(138,135,128,0.15); color: var(--ink-dim); }
+  .lineup-count.out   { background: rgba(255,74,28,0.1); color: var(--accent); }
+
+  .drag-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    min-height: 70px;
+  }
+  .drag-grid.empty::after {
+    content: 'drop here';
+    grid-column: 1 / -1;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-mute);
+    padding: 16px;
+    border: 1.5px dashed var(--line);
+    border-radius: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .drag-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 4px;
+    border-radius: 12px;
+    cursor: grab;
+    user-select: none;
+    transition: transform 0.15s, opacity 0.15s;
+    position: relative;
+  }
+  .drag-tile:active { cursor: grabbing; }
+  .drag-tile.dragging { opacity: 0.4; transform: scale(0.95); }
+  .drag-tile .avatar {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: var(--bg-elev);
+    border: 2px solid var(--line);
+    display: grid; place-items: center;
+    font-family: 'Anton', sans-serif;
+    font-size: 14px;
+    color: var(--ink);
+    position: relative;
+    pointer-events: none;
+  }
+  .drag-tile.team-t1 .avatar { background: var(--accent); color: #000; border-color: var(--accent); }
+  .drag-tile.team-t2 .avatar { background: var(--accent-3); color: #000; border-color: var(--accent-3); }
+  .drag-tile.is-captain .avatar::after {
+    content: 'C';
+    position: absolute;
+    top: -3px; right: -3px;
+    width: 16px; height: 16px;
+    background: var(--gold);
+    color: #000;
+    border-radius: 50%;
+    border: 2px solid var(--bg-card);
+    font-family: 'Anton', sans-serif;
+    font-size: 10px;
+    display: grid; place-items: center;
+    line-height: 1;
+  }
+  .drag-tile.is-captain {
+    cursor: not-allowed;
+  }
+  .drag-tile.is-captain::before {
+    content: '🔒';
+    position: absolute;
+    bottom: 18px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 8px;
+    opacity: 0;
+    transition: opacity 0.15s;
+    pointer-events: none;
+  }
+  .drag-tile.is-captain:hover::before { opacity: 1; }
+  .drag-tile .pname {
+    font-size: 9px;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    text-align: center;
+    line-height: 1.1;
+    pointer-events: none;
+  }
+  .drag-tile.is-captain .pname { color: var(--gold); }
+
+  /* ADMIN SCORE ENTRY */
+  .score-input-row {
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+    margin: 0 20px 16px;
+    padding: 20px;
+    background: var(--bg-card);
+    border-radius: 20px;
+    border: 1px solid var(--line);
+  }
+  .score-team {
+    flex: 1;
+    text-align: center;
+  }
+  .score-team-name {
+    font-family: 'Anton', sans-serif;
+    font-size: 14px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .score-input {
+    width: 80px; height: 80px;
+    background: var(--bg);
+    border: 2px solid var(--line);
+    border-radius: 18px;
+    text-align: center;
+    font-family: 'Anton', sans-serif;
+    font-size: 38px;
+    color: var(--accent-2);
+  }
+  .score-vs {
+    font-family: 'Anton', sans-serif;
+    font-size: 20px;
+    color: var(--ink-mute);
+  }
+
+  /* PROFILE */
+  .profile-card {
+    margin: 0 20px;
+    padding: 24px;
+    background: linear-gradient(135deg, var(--bg-card), var(--bg-elev));
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    text-align: center;
+  }
+  .profile-avatar {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #000;
+    margin: 0 auto 12px;
+    display: grid; place-items: center;
+    font-family: 'Anton', sans-serif;
+    font-size: 32px;
+    border: 3px solid var(--ink);
+  }
+  .profile-name {
+    font-family: 'Anton', sans-serif;
+    font-size: 22px;
+    text-transform: uppercase;
+  }
+  .profile-email {
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    margin-top: 4px;
+  }
+  .role-badges { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 12px; }
+  .role-badge {
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .role-badge.admin { background: var(--accent); color: #000; }
+  .role-badge.group-cap { background: var(--gold); color: #000; }
+  .role-badge.sport-cap { background: var(--accent-3); color: #000; }
+  .role-badge.player { background: var(--bg-elev); color: var(--ink-dim); border: 1px solid var(--line); }
+
+  /* PROFILE — hero, stats, action grid, match list */
+  .profile-hero {
+    margin: 0 20px;
+    padding: 28px 20px 24px;
+    border-radius: 28px;
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at top right, rgba(255,74,28,0.18), transparent 60%),
+      linear-gradient(180deg, var(--bg-card), var(--bg-elev));
+    border: 1px solid var(--line);
+    text-align: center;
+  }
+  .profile-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      repeating-linear-gradient(45deg, transparent, transparent 12px, rgba(255,255,255,0.015) 12px, rgba(255,255,255,0.015) 13px);
+    pointer-events: none;
+  }
+  .profile-hero-avatar {
+    width: 88px; height: 88px;
+    border-radius: 50%;
+    margin: 0 auto 14px;
+    display: grid; place-items: center;
+    font-family: 'Anton', sans-serif;
+    font-size: 34px;
+    color: #000;
+    border: 3px solid var(--bg);
+    box-shadow: 0 0 0 2px var(--accent), 0 8px 24px rgba(0,0,0,0.4);
+    position: relative;
+  }
+  .profile-hero-avatar.team-t1 { background: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 8px 24px rgba(0,0,0,0.4); }
+  .profile-hero-avatar.team-t2 { background: var(--accent-3); box-shadow: 0 0 0 2px var(--accent-3), 0 8px 24px rgba(0,0,0,0.4); }
+  .profile-hero-avatar.team-t3 { background: var(--accent-2); box-shadow: 0 0 0 2px var(--accent-2), 0 8px 24px rgba(0,0,0,0.4); }
+  .profile-hero-avatar.team-t4 { background: var(--accent-4); box-shadow: 0 0 0 2px var(--accent-4), 0 8px 24px rgba(0,0,0,0.4); }
+  .profile-hero-avatar.is-captain::after {
+    content: 'C';
+    position: absolute;
+    top: -4px; right: -4px;
+    width: 24px; height: 24px;
+    background: var(--gold);
+    color: #000;
+    border-radius: 50%;
+    border: 3px solid var(--bg);
+    font-family: 'Anton', sans-serif;
+    font-size: 13px;
+    display: grid; place-items: center;
+    line-height: 1;
+  }
+  .profile-hero-name {
+    font-family: 'Anton', sans-serif;
+    font-size: 28px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    position: relative;
+  }
+  .profile-hero-email {
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    margin-top: 6px;
+    letter-spacing: 0.04em;
+    position: relative;
+  }
+  .profile-hero-team {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(255,74,28,0.12);
+    border: 1px solid rgba(255,74,28,0.3);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    position: relative;
+  }
+  .profile-hero-team .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .profile-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin: 16px 20px 0;
+  }
+  .pstat {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px 10px;
+    text-align: center;
+  }
+  .pstat-val {
+    font-family: 'Anton', sans-serif;
+    font-size: 26px;
+    line-height: 1;
+    color: var(--accent-2);
+  }
+  .pstat-val.gold { color: var(--gold); }
+  .pstat-val.cyan { color: var(--accent-3); }
+  .pstat-lbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 6px;
+  }
+
+  .quick-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 0 20px;
+  }
+  .qaction {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px;
+    color: var(--ink);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    text-align: left;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .qaction:active { transform: scale(0.97); }
+  .qaction.primary {
+    background: linear-gradient(135deg, var(--accent), #b8350f);
+    border-color: var(--accent);
+    color: #000;
+  }
+  .qaction.gold {
+    background: linear-gradient(135deg, var(--gold), #b8911c);
+    border-color: var(--gold);
+    color: #000;
+  }
+  .qaction.cyan {
+    background: linear-gradient(135deg, var(--accent-3), #2a8eb0);
+    border-color: var(--accent-3);
+    color: #000;
+  }
+  .qaction-icon {
+    width: 32px; height: 32px;
+    border-radius: 10px;
+    background: rgba(0,0,0,0.15);
+    display: grid; place-items: center;
+  }
+  .qaction.primary .qaction-icon,
+  .qaction.gold .qaction-icon,
+  .qaction.cyan .qaction-icon { background: rgba(0,0,0,0.18); }
+  .qaction-label {
+    font-family: 'Anton', sans-serif;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1;
+  }
+  .qaction-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    opacity: 0.7;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .pmatch-row {
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    margin: 0 20px 8px;
+    cursor: pointer;
+  }
+  .pmatch-row:active { transform: scale(0.99); }
+  .pmatch-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: var(--bg-elev);
+    display: grid; place-items: center;
+    font-family: 'Anton', sans-serif;
+    font-size: 11px;
+    color: var(--accent-2);
+    letter-spacing: 0.04em;
+  }
+  .pmatch-info {
+    min-width: 0;
+  }
+  .pmatch-title {
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .pmatch-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    margin-top: 2px;
+  }
+  .pmatch-status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .pmatch-status.win { background: rgba(232,255,74,0.12); color: var(--accent-2); }
+  .pmatch-status.loss { background: rgba(255,74,28,0.1); color: var(--accent); }
+  .pmatch-status.live { background: var(--accent); color: #000; }
+
+  .signout-btn {
+    display: block;
+    width: calc(100% - 40px);
+    margin: 20px 20px 0;
+    padding: 14px;
+    background: transparent;
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+  }
+  .signout-btn:active { transform: scale(0.98); color: var(--accent); border-color: var(--accent); }
+
+  /* ============ REFEREE SCREEN ============ */
+  .ref-header {
+    margin: 0 20px 14px;
+    padding: 18px 20px;
+    background: linear-gradient(135deg, #1a1815, #0f0e0c);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .ref-header::before {
+    content: 'REF';
+    position: absolute;
+    right: -8px; top: -18px;
+    font-family: 'Anton', sans-serif;
+    font-size: 90px;
+    color: rgba(255,74,28,0.06);
+    line-height: 1;
+    pointer-events: none;
+  }
+  .ref-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .ref-badge .pulse-dot {
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 1.2s infinite;
+  }
+  .ref-match {
+    font-family: 'Anton', sans-serif;
+    font-size: 22px;
+    text-transform: uppercase;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .ref-match .vs-text { color: var(--ink-mute); padding: 0 8px; }
+  .ref-sport-line {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-dim);
+    letter-spacing: 0.04em;
+  }
+
+  /* Big score & timer block */
+  .ref-scoreboard {
+    margin: 0 20px 14px;
+    padding: 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+  }
+  .ref-score-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 8px;
+  }
+  .ref-side {
+    text-align: center;
+    padding: 8px;
+    border-radius: 14px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+  }
+  .ref-side.team-t1 { border-color: var(--accent); }
+  .ref-side.team-t2 { border-color: var(--accent-3); }
+  .ref-side-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .ref-side-score {
+    font-family: 'Anton', sans-serif;
+    font-size: 56px;
+    line-height: 1;
+    margin: 4px 0;
+  }
+  .ref-side.team-t1 .ref-side-score { color: var(--accent); }
+  .ref-side.team-t2 .ref-side-score { color: var(--accent-3); }
+  .ref-side-controls {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+    margin-top: 6px;
+  }
+  .ref-pm {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-family: 'Anton', sans-serif;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    transition: transform 0.08s;
+  }
+  .ref-pm:active { transform: scale(0.85); background: var(--accent); color: #000; border-color: var(--accent); }
+  .ref-pm.plus { background: rgba(232,255,74,0.08); border-color: rgba(232,255,74,0.3); color: var(--accent-2); }
+  .ref-pm.plus:active { background: var(--accent-2); }
+
+  .ref-clock {
+    text-align: center;
+    padding: 0 8px;
+    min-width: 80px;
+  }
+  .ref-clock-time {
+    font-family: 'Anton', sans-serif;
+    font-size: 28px;
+    color: var(--ink);
+    line-height: 1;
+    letter-spacing: 0.02em;
+  }
+  .ref-clock-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--ink-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+  .ref-clock-controls {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+    margin-top: 8px;
+  }
+  .ref-clock-btn {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--ink-dim);
+    display: grid; place-items: center;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .ref-clock-btn.playing { background: var(--accent); color: #000; border-color: var(--accent); }
+  .ref-clock-btn:active { transform: scale(0.9); }
+
+  /* Generic punch-in grid (used per-sport) */
+  .punch-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 0 20px;
+  }
+  .punch-grid.three { grid-template-columns: repeat(3, 1fr); }
+  .punch-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px 12px;
+    color: var(--ink);
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: all 0.12s;
+    position: relative;
+    overflow: hidden;
+  }
+  .punch-btn:active { transform: scale(0.97); background: var(--bg-elev); }
+  .punch-btn .punch-icon {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.06);
+    display: grid; place-items: center;
+    color: var(--accent-2);
+  }
+  .punch-btn .punch-label {
+    font-family: 'Anton', sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .punch-btn .punch-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--ink-dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .punch-btn.lime .punch-icon { color: var(--accent-2); background: rgba(232,255,74,0.1); }
+  .punch-btn.cyan .punch-icon { color: var(--accent-3); background: rgba(74,212,255,0.1); }
+  .punch-btn.pink .punch-icon { color: var(--accent-4); background: rgba(255,74,208,0.1); }
+  .punch-btn.warn .punch-icon { color: var(--accent); background: rgba(255,74,28,0.1); }
+
+  /* Counter style punch (with -/+ inline) */
+  .counter-card {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 12px 14px;
+    margin: 0 20px 8px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 12px;
+  }
+  .counter-info { min-width: 0; }
+  .counter-label {
+    font-family: 'Anton', sans-serif;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1.1;
+  }
+  .counter-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    margin-top: 3px;
+    letter-spacing: 0.04em;
+  }
+  .counter-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .counter-value {
+    font-family: 'Anton', sans-serif;
+    font-size: 24px;
+    min-width: 38px;
+    text-align: center;
+    color: var(--accent-2);
+    line-height: 1;
+  }
+
+  /* Recent events log */
+  .ref-log {
+    margin: 0 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 12px 14px;
+  }
+  .ref-log-item {
+    display: grid;
+    grid-template-columns: 40px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .ref-log-item:last-child { border-bottom: none; }
+  .ref-log-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    letter-spacing: 0.04em;
+  }
+  .ref-log-desc {
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .ref-log-desc .hl-t1 { color: var(--accent); font-weight: 700; }
+  .ref-log-desc .hl-t2 { color: var(--accent-3); font-weight: 700; }
+  .ref-log-undo {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--ink-dim);
+    background: transparent;
+    border: 1px solid var(--line);
+    padding: 4px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .ref-log-undo:active { color: var(--accent); border-color: var(--accent); }
+
+  /* Sport switcher inside referee — sometimes a ref covers multiple matches */
+  .ref-match-switcher {
+    display: flex;
+    gap: 6px;
+    padding: 0 20px 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ref-match-switcher::-webkit-scrollbar { display: none; }
+  .ref-match-pill {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    font-size: 11px;
+    color: var(--ink-dim);
+    cursor: pointer;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .ref-match-pill.active { background: var(--accent); color: #000; border-color: var(--accent); }
+  .ref-match-pill .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--accent-2);
+  }
+  .ref-match-pill.active .dot { background: #000; }
+
+  /* Bottom action bar — sticky for referee */
+  .ref-action-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 12px 20px 0;
+  }
+  .ref-action-bar .primary-btn,
+  .ref-action-bar .ghost-btn {
+    margin: 0;
+    width: 100%;
+    padding: 14px 12px;
+    font-size: 12px;
+  }
+
+  /* Referee assignment row (admin tab) */
+  .ref-assign-card {
+    margin: 0 20px 8px;
+    padding: 12px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+  .ref-assign-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px;
+  }
+  .ref-assign-title {
+    font-family: 'Anton', sans-serif;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .ref-assign-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    margin-top: 2px;
+  }
+  .ref-assign-list {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .ref-chip {
+    padding: 5px 10px 5px 6px;
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 11px;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .ref-chip .avatar-mini {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #000;
+    font-family: 'Anton', sans-serif;
+    font-size: 10px;
+    display: grid; place-items: center;
+  }
+  .ref-chip .x { color: var(--ink-mute); cursor: pointer; margin-left: 2px; }
+  .ref-chip.assigned { border-color: var(--accent); color: var(--accent); }
+
+  /* RULEBOOK */
+  .rulebook-card {
+    margin: 0 20px 16px;
+    background:
+      linear-gradient(135deg, var(--bg-card), var(--bg-elev));
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 20px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .pdf-icon {
+    width: 56px; height: 64px;
+    background: var(--accent);
+    color: #000;
+    border-radius: 8px;
+    display: grid; place-items: center;
+    font-family: 'Anton', sans-serif;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .rulebook-info { flex: 1; }
+  .rulebook-title { font-weight: 700; font-size: 14px; }
+  .rulebook-meta { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); margin-top: 4px; }
+  .rule-section {
+    padding: 14px 16px;
+    margin: 0 20px 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer;
+  }
+  .rule-section-title {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 12px;
+  }
+  .rule-section-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-dim);
+    margin-top: 3px;
+  }
+
+  /* ROLE SWITCHER (demo) */
+  .role-switcher {
+    position: absolute;
+    top: 12px; right: 12px;
+    z-index: 999;
+    background: rgba(20,20,20,0.92);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 4px;
+    display: flex; gap: 2px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+  }
+  .role-switcher button {
+    background: transparent;
+    border: none;
+    color: var(--ink-dim);
+    padding: 4px 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .role-switcher button.active { background: var(--accent); color: #000; }
+
+  /* SCREEN TRANSITIONS */
+  .screen { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .screen.active { display: flex; animation: slideIn 0.25s ease-out; }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* BACK HEADER */
+  .back-header {
+    padding: 48px 20px 14px;
+    display: flex; align-items: center; gap: 12px;
+    background: linear-gradient(180deg, var(--bg) 70%, transparent);
+  }
+  @media (max-width: 768px) { .back-header { padding: 56px 20px 14px; } }
+  .back-btn {
+    width: 36px; height: 36px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--bg-card);
+    color: var(--ink);
+    display: grid; place-items: center;
+    cursor: pointer;
+  }
+  .back-header h1 {
+    font-family: 'Anton', sans-serif;
+    font-size: 18px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  /* hint banner */
+  .demo-banner {
+    margin: 0 20px 12px;
+    padding: 10px 14px;
+    background: rgba(232,255,74,0.08);
+    border: 1px solid rgba(232,255,74,0.25);
+    border-radius: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--accent-2);
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+
+  /* AI Rulebook Parser */
+  .tab-switch {
+    display: flex;
+    gap: 4px;
+    margin: 0 20px 12px;
+    padding: 4px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+  }
+  .tab-switch button {
+    flex: 1;
+    padding: 10px;
+    background: transparent;
+    border: none;
+    color: var(--ink-dim);
+    border-radius: 9px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+  }
+  .tab-switch button.active { background: var(--accent); color: #000; }
+  .textarea {
+    width: calc(100% - 40px);
+    margin: 0 20px;
+    padding: 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    border-radius: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    min-height: 140px;
+    resize: vertical;
+    line-height: 1.6;
+  }
+  .ai-status {
+    margin: 12px 20px;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, rgba(255,74,28,0.1), rgba(232,255,74,0.05));
+    border: 1px solid rgba(255,74,28,0.3);
+    border-radius: 12px;
+    display: flex; align-items: center; gap: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+  .ai-spinner {
+    width: 14px; height: 14px;
+    border: 2px solid var(--ink-mute);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .parsed-card {
+    margin: 0 20px 10px;
+    padding: 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+  }
+  .parsed-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px;
+  }
+  .parsed-sport {
+    font-family: 'Anton', sans-serif;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .parsed-conf {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(232,255,74,0.15);
+    color: var(--accent-2);
+    letter-spacing: 0.06em;
+  }
+  .parsed-conf.warn { background: rgba(255,74,28,0.15); color: var(--accent); }
+  .parsed-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .parsed-field {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px 10px;
+  }
+  .parsed-field label {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 4px;
+  }
+  .parsed-field input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .parsed-field input:focus { outline: none; }
+  .parsed-field.missing { border-color: var(--accent); background: rgba(255,74,28,0.05); }
+  .parsed-field.missing input::placeholder { color: var(--accent); opacity: 0.7; }
+
+  /* ADMIN — Tabbed Setup */
+  .admin-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 0 20px 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .admin-tabs::-webkit-scrollbar { display: none; }
+  .admin-tab {
+    flex-shrink: 0;
+    padding: 12px 14px;
+    background: transparent;
+    border: none;
+    color: var(--ink-dim);
+    font-family: 'Anton', sans-serif;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    position: relative;
+    transition: color 0.15s;
+    white-space: nowrap;
+  }
+  .admin-tab::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 14px; right: 14px;
+    height: 3px;
+    background: transparent;
+    border-radius: 2px 2px 0 0;
+    transition: background 0.2s;
+  }
+  .admin-tab.active { color: var(--accent); }
+  .admin-tab.active::after { background: var(--accent); }
+  .admin-tab .badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    background: var(--accent);
+    color: #000;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    vertical-align: middle;
+  }
+  .admin-tab.active .badge { background: var(--bg); color: var(--accent); }
+  .admin-pane { display: none; }
+  .admin-pane.active { display: block; animation: paneIn 0.2s ease-out; }
+  @keyframes paneIn {
+    from { opacity: 0; transform: translateX(4px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+</style>
+</head>
+<body>
+
+<div class="phone-stage">
+  <div class="phone">
+    <div class="app" id="app">
+
+      <!-- Role switcher (demo only) -->
+      <div class="role-switcher" id="roleSwitcher">
+        <button class="active" data-role="guest">Guest</button>
+        <button data-role="player">Player</button>
+        <button data-role="referee">Ref</button>
+        <button data-role="sport-cap">SCap</button>
+        <button data-role="group-cap">GCap</button>
+        <button data-role="admin">Admin</button>
+      </div>
+
+      <!-- ============ LOGIN SCREEN ============ -->
+      <div class="screen" id="screen-login">
+        <div class="login-wrap">
+          <div class="login-logo">CHEQ<span>·</span>FEST</div>
+          <div class="login-tag">SPORTS // SEASON 24</div>
+          <div class="login-content"></div>
+          <div class="login-body">
+            <h2>Sign in</h2>
+            <p>Use your CHEQ company email to participate. Anyone can browse without signing in.</p>
+            <button class="gbtn" onclick="navigate('home')">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21.35 11.1H12v3.2h5.35c-.23 1.34-1.62 3.94-5.35 3.94-3.22 0-5.85-2.66-5.85-5.94S8.78 6.36 12 6.36c1.83 0 3.06.78 3.76 1.45l2.56-2.46C16.69 3.86 14.55 3 12 3 6.96 3 2.88 7.04 2.88 12s4.08 9 9.12 9c5.27 0 8.76-3.7 8.76-8.9 0-.6-.07-1.06-.16-1.5z" fill="currentColor"/></svg>
+              Continue with Google
+            </button>
+            <div class="domain-note">// only @cheq.one accounts permitted</div>
+            <a class="guest-link" onclick="navigate('home')">Continue as <u>Guest →</u></a>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ PROFILE SCREEN (logged-in user) ============ -->
+      <div class="screen" id="screen-profile">
+        <div class="topbar">
+          <div class="topbar-title">PRO<span class="dot">·</span>FILE</div>
+          <div class="topbar-actions">
+            <button class="icon-btn" title="Settings">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="screen-scroll">
+          <!-- HERO -->
+          <div class="profile-hero">
+            <div class="profile-hero-avatar team-t1" id="profileAvatar">SH</div>
+            <div class="profile-hero-name" id="profileName">SHAH MEHTA</div>
+            <div class="profile-hero-email" id="profileEmail">shah@cheq.one</div>
+            <div class="profile-hero-team">
+              <span class="dot"></span>
+              <span id="profileTeam">TRIDENTS · MEMBER</span>
+            </div>
+            <div class="role-badges" id="profileRoles">
+              <span class="role-badge player">Player</span>
+            </div>
+          </div>
+
+          <!-- STATS -->
+          <div class="profile-stats">
+            <div class="pstat">
+              <div class="pstat-val">7</div>
+              <div class="pstat-lbl">Matches</div>
+            </div>
+            <div class="pstat">
+              <div class="pstat-val cyan">4</div>
+              <div class="pstat-lbl">Wins</div>
+            </div>
+            <div class="pstat">
+              <div class="pstat-val gold">18</div>
+              <div class="pstat-lbl">Pts Earned</div>
+            </div>
+          </div>
+
+          <!-- QUICK ACTIONS — role-aware -->
+          <div class="section-title">Quick Actions</div>
+          <div class="quick-actions" id="quickActions">
+            <!-- Player-default actions (shown to everyone logged in) -->
+            <button class="qaction" onclick="navigate('team')">
+              <div class="qaction-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </div>
+              <div class="qaction-label">My Team</div>
+              <div class="qaction-sub">Tridents · #1</div>
+            </button>
+            <button class="qaction" onclick="navigate('arena')">
+              <div class="qaction-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3v18"/></svg>
+              </div>
+              <div class="qaction-label">Live Now</div>
+              <div class="qaction-sub">Football · 2-1</div>
+            </button>
+            <!-- Role-specific actions injected here by JS -->
+          </div>
+
+          <!-- MY MATCHES -->
+          <div class="section-title">Upcoming · You're Playing</div>
+          <div class="pmatch-row" onclick="navigate('arena')">
+            <div class="pmatch-icon">FB</div>
+            <div class="pmatch-info">
+              <div class="pmatch-title">Tridents vs Phantoms</div>
+              <div class="pmatch-sub">Today · 4:30 PM · Ground A</div>
+            </div>
+            <div class="pmatch-status live">LIVE</div>
+          </div>
+          <div class="pmatch-row" onclick="navigate('arena')">
+            <div class="pmatch-icon">CR</div>
+            <div class="pmatch-info">
+              <div class="pmatch-title">Tridents vs Voltron</div>
+              <div class="pmatch-sub">Tomorrow · 11:00 AM · Oval</div>
+            </div>
+            <div class="pmatch-status">UPCOMING</div>
+          </div>
+
+          <div class="section-title">Recent Results</div>
+          <div class="pmatch-row" onclick="navigate('arena')">
+            <div class="pmatch-icon">BD</div>
+            <div class="pmatch-info">
+              <div class="pmatch-title">Tridents vs Blazers</div>
+              <div class="pmatch-sub">Apr 15 · Won 21–18 · Court 2</div>
+            </div>
+            <div class="pmatch-status win">WIN</div>
+          </div>
+          <div class="pmatch-row" onclick="navigate('arena')">
+            <div class="pmatch-icon">FB</div>
+            <div class="pmatch-info">
+              <div class="pmatch-title">Tridents vs Voltron</div>
+              <div class="pmatch-sub">Apr 14 · Lost 1–3 · Ground A</div>
+            </div>
+            <div class="pmatch-status loss">LOSS</div>
+          </div>
+
+          <button class="signout-btn" onclick="navigate('login')">→ Sign Out</button>
+        </div>
+      </div>
+
+      <!-- ============ HOME SCREEN ============ -->
+      <div class="screen active" id="screen-home">
+        <div class="topbar">
+          <div class="topbar-title">CHEQ<span class="dot">·</span>FEST</div>
+          <div class="topbar-actions">
+            <button class="icon-btn" onclick="navigate('rulebook')" title="Rulebook">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4a2 2 0 0 1 2-2h10l4 4v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4z"/><path d="M14 2v6h6"/></svg>
+            </button>
+            <button class="icon-btn" onclick="navigate('login')" title="Profile">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="screen-scroll">
+          <div class="hero">
+            <div class="hero-kicker">LIVE NOW · DAY 03 / 05</div>
+            <div class="hero-title">CHEQ<br/>SPORTS <span>'26</span></div>
+            <div class="hero-meta">Apr 14 — Apr 18 · Bengaluru HQ</div>
+            <div class="hero-stats">
+              <div class="stat"><div class="stat-val">8</div><div class="stat-lbl">Sports</div></div>
+              <div class="stat"><div class="stat-val">4</div><div class="stat-lbl">Teams</div></div>
+              <div class="stat"><div class="stat-val">142</div><div class="stat-lbl">Players</div></div>
+            </div>
+          </div>
+
+          <div class="section-title">Live & Upcoming <a class="more">VIEW ALL →</a></div>
+          <div class="live-strip">
+            <div class="match-card live" onclick="navigate('arena')">
+              <div class="match-sport"><span>FOOTBALL · GROUND A</span><span class="chip live">LIVE</span></div>
+              <div class="match-teams">
+                <div class="team-block">
+                  <div class="team-flag" style="background:var(--accent)">TR</div>
+                  <div class="team-name">Tridents</div>
+                  <div class="team-score">2</div>
+                </div>
+                <div class="vs">VS</div>
+                <div class="team-block">
+                  <div class="team-flag" style="background:var(--accent-3)">PH</div>
+                  <div class="team-name">Phantoms</div>
+                  <div class="team-score">1</div>
+                </div>
+              </div>
+            </div>
+            <div class="match-card" onclick="navigate('arena')">
+              <div class="match-sport"><span>CRICKET · OVAL</span><span class="chip upcoming">5:30 PM</span></div>
+              <div class="match-teams">
+                <div class="team-block">
+                  <div class="team-flag" style="background:var(--accent-2)">BL</div>
+                  <div class="team-name">Blazers</div>
+                  <div class="team-score">—</div>
+                </div>
+                <div class="vs">VS</div>
+                <div class="team-block">
+                  <div class="team-flag" style="background:var(--accent-4)">VL</div>
+                  <div class="team-name">Voltron</div>
+                  <div class="team-score">—</div>
+                </div>
+              </div>
+            </div>
+            <div class="match-card" onclick="navigate('arena')">
+              <div class="match-sport"><span>BADMINTON · CRT 2</span><span class="chip done">FINAL</span></div>
+              <div class="match-teams">
+                <div class="team-block">
+                  <div class="team-flag" style="background:var(--accent-2)">BL</div>
+                  <div class="team-name">Blazers</div>
+                  <div class="team-score">21</div>
+                </div>
+                <div class="vs">VS</div>
+                <div class="team-block">
+                  <div class="team-flag" style="background:var(--accent)">TR</div>
+                  <div class="team-name">Tridents</div>
+                  <div class="team-score">18</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-title">Overall Standings <a class="more" onclick="navigate('leaderboard')">FULL BOARD →</a></div>
+          <div class="lb-row rank-1" onclick="navigate('team')">
+            <div class="lb-rank">1</div>
+            <div class="lb-flag" style="background:var(--accent)">TR</div>
+            <div>
+              <div class="lb-name">Tridents</div>
+              <div class="lb-sub">5W · 1L · 2D</div>
+            </div>
+            <div class="lb-trend">↑ 2</div>
+            <div class="lb-points">86</div>
+          </div>
+          <div class="lb-row rank-2" onclick="navigate('team')">
+            <div class="lb-rank">2</div>
+            <div class="lb-flag" style="background:var(--accent-3)">PH</div>
+            <div>
+              <div class="lb-name">Phantoms</div>
+              <div class="lb-sub">4W · 2L · 1D</div>
+            </div>
+            <div class="lb-trend down">↓ 1</div>
+            <div class="lb-points">72</div>
+          </div>
+          <div class="lb-row rank-3" onclick="navigate('team')">
+            <div class="lb-rank">3</div>
+            <div class="lb-flag" style="background:var(--accent-2)">BL</div>
+            <div>
+              <div class="lb-name">Blazers</div>
+              <div class="lb-sub">3W · 3L · 1D</div>
+            </div>
+            <div class="lb-trend">↑ 1</div>
+            <div class="lb-points">58</div>
+          </div>
+          <div class="lb-row" onclick="navigate('team')">
+            <div class="lb-rank">4</div>
+            <div class="lb-flag" style="background:var(--accent-4)">VL</div>
+            <div>
+              <div class="lb-name">Voltron</div>
+              <div class="lb-sub">2W · 4L · 1D</div>
+            </div>
+            <div class="lb-trend down">↓ 2</div>
+            <div class="lb-points">44</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ LEADERBOARD SCREEN ============ -->
+      <div class="screen" id="screen-leaderboard">
+        <div class="topbar">
+          <div class="topbar-title">LEADER<span class="dot">·</span>BOARD</div>
+        </div>
+        <div class="screen-scroll">
+          <div class="sport-picker">
+            <button class="sport-pill active">Overall</button>
+            <button class="sport-pill">Football</button>
+            <button class="sport-pill">Cricket</button>
+            <button class="sport-pill">Badminton</button>
+            <button class="sport-pill">Basketball</button>
+            <button class="sport-pill">Chess</button>
+            <button class="sport-pill">Carrom</button>
+          </div>
+          <div class="lb-row rank-1" onclick="navigate('team')">
+            <div class="lb-rank">1</div><div class="lb-flag" style="background:var(--accent)">TR</div>
+            <div><div class="lb-name">Tridents</div><div class="lb-sub">5W · 1L · 2D</div></div>
+            <div class="lb-trend">↑ 2</div><div class="lb-points">86</div>
+          </div>
+          <div class="lb-row rank-2" onclick="navigate('team')">
+            <div class="lb-rank">2</div><div class="lb-flag" style="background:var(--accent-3)">PH</div>
+            <div><div class="lb-name">Phantoms</div><div class="lb-sub">4W · 2L · 1D</div></div>
+            <div class="lb-trend down">↓ 1</div><div class="lb-points">72</div>
+          </div>
+          <div class="lb-row rank-3" onclick="navigate('team')">
+            <div class="lb-rank">3</div><div class="lb-flag" style="background:var(--accent-2)">BL</div>
+            <div><div class="lb-name">Blazers</div><div class="lb-sub">3W · 3L · 1D</div></div>
+            <div class="lb-trend">↑ 1</div><div class="lb-points">58</div>
+          </div>
+          <div class="lb-row" onclick="navigate('team')">
+            <div class="lb-rank">4</div><div class="lb-flag" style="background:var(--accent-4)">VL</div>
+            <div><div class="lb-name">Voltron</div><div class="lb-sub">2W · 4L · 1D</div></div>
+            <div class="lb-trend down">↓ 2</div><div class="lb-points">44</div>
+          </div>
+
+          <div class="section-title">By Sport · Football</div>
+          <div class="lb-row rank-1"><div class="lb-rank">1</div><div class="lb-flag" style="background:var(--accent)">TR</div><div><div class="lb-name">Tridents</div><div class="lb-sub">3W · 0L</div></div><div class="lb-trend">↑</div><div class="lb-points">24</div></div>
+          <div class="lb-row rank-2"><div class="lb-rank">2</div><div class="lb-flag" style="background:var(--accent-3)">PH</div><div><div class="lb-name">Phantoms</div><div class="lb-sub">2W · 1L</div></div><div class="lb-trend">↑</div><div class="lb-points">16</div></div>
+          <div class="lb-row rank-3"><div class="lb-rank">3</div><div class="lb-flag" style="background:var(--accent-2)">BL</div><div><div class="lb-name">Blazers</div><div class="lb-sub">1W · 2L</div></div><div class="lb-trend down">↓</div><div class="lb-points">8</div></div>
+        </div>
+      </div>
+
+      <!-- ============ ARENA SCREEN ============ -->
+      <div class="screen" id="screen-arena">
+        <div class="topbar">
+          <div class="topbar-title">THE<span class="dot">·</span>ARENA</div>
+          <div class="topbar-actions">
+            <button class="icon-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-4-4m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z"/></svg></button>
+          </div>
+        </div>
+        <div class="screen-scroll">
+          <div class="arena-header">
+            <div class="arena-title">FOOTBALL</div>
+            <div class="arena-meta">// MATCHDAY 03 · GROUND A · 4:30 PM</div>
+          </div>
+          <div class="sport-picker">
+            <button class="sport-pill active">Football</button>
+            <button class="sport-pill">Cricket</button>
+            <button class="sport-pill">Badminton</button>
+            <button class="sport-pill">Basketball</button>
+            <button class="sport-pill">Chess</button>
+          </div>
+
+          <div class="arena-wrap">
+            <div class="arena-score-strip">
+              <div class="arena-team"><div class="dot" style="background:var(--accent)"></div>TRI <span style="color:var(--accent-2);margin-left:6px;">2</span></div>
+              <div class="arena-vs">23' · 1H</div>
+              <div class="arena-team"><span style="color:var(--accent-2);margin-right:6px;">1</span>PHN <div class="dot" style="background:var(--accent-3)"></div></div>
+            </div>
+            <div class="field">
+              <!-- Team 1 (Tridents · orange) — Shah is captain -->
+              <div class="player" style="left:18%; top:50%;"><div class="face is-captain">SH</div><div class="nameplate">SHAH</div></div>
+              <div class="player" style="left:32%; top:25%;"><div class="face">RV</div><div class="nameplate">RAVI</div></div>
+              <div class="player" style="left:32%; top:75%;"><div class="face">KR</div><div class="nameplate">KIRTI</div></div>
+              <div class="player" style="left:42%; top:50%;"><div class="face">AR</div><div class="nameplate">ARJUN</div></div>
+              <div class="player" style="left:45%; top:30%;"><div class="face">PR</div><div class="nameplate">PRIYA</div></div>
+              <!-- Team 2 (Phantoms · cyan) — Nia is captain -->
+              <div class="player t2" style="left:82%; top:50%;"><div class="face is-captain">NI</div><div class="nameplate">NIA</div></div>
+              <div class="player t2" style="left:68%; top:25%;"><div class="face">DV</div><div class="nameplate">DEV</div></div>
+              <div class="player t2" style="left:68%; top:75%;"><div class="face">MH</div><div class="nameplate">MEHA</div></div>
+              <div class="player t2" style="left:58%; top:50%;"><div class="face">RJ</div><div class="nameplate">RAJ</div></div>
+              <div class="player t2" style="left:55%; top:70%;"><div class="face">AN</div><div class="nameplate">ANI</div></div>
+              <!-- Ball -->
+              <div class="ball"></div>
+            </div>
+          </div>
+
+          <div class="demo-banner">// player count, formation & arena shape pulled from rulebook config per sport · tap a face to see player card</div>
+
+          <div class="section-title">On The Pitch · Tridents</div>
+          <div class="roster-grid" style="padding-bottom:12px">
+            <div class="player-tile team-t1 is-captain"><div class="avatar">SH</div><div class="pname">SHAH</div><div class="role" style="color:var(--gold)">CAPTAIN</div></div>
+            <div class="player-tile team-t1"><div class="avatar">RV</div><div class="pname">RAVI</div><div class="role">DF</div></div>
+            <div class="player-tile team-t1"><div class="avatar">KR</div><div class="pname">KIRTI</div><div class="role">DF</div></div>
+            <div class="player-tile team-t1"><div class="avatar">AR</div><div class="pname">ARJUN</div><div class="role">MD</div></div>
+            <div class="player-tile team-t1"><div class="avatar">PR</div><div class="pname">PRIYA</div><div class="role">FW</div></div>
+          </div>
+
+          <div class="section-title">Tentative</div>
+          <div class="roster-grid" style="padding-bottom:12px">
+            <div class="player-tile team-t1"><div class="avatar">VI</div><div class="pname">VIKRAM</div><div class="role">RES</div></div>
+            <div class="player-tile team-t1"><div class="avatar">NE</div><div class="pname">NEHA</div><div class="role">RES</div></div>
+          </div>
+
+          <div class="section-title">Substitutes</div>
+          <div class="roster-grid">
+            <div class="player-tile team-t1"><div class="avatar">AM</div><div class="pname">AMIT</div><div class="role">SUB</div></div>
+            <div class="player-tile team-t1"><div class="avatar">DI</div><div class="pname">DIYA</div><div class="role">SUB</div></div>
+            <div class="player-tile team-t1"><div class="avatar">RO</div><div class="pname">ROHAN</div><div class="role">SUB</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ TEAM DETAIL SCREEN ============ -->
+      <div class="screen" id="screen-team">
+        <div class="back-header">
+          <button class="back-btn" onclick="navigate('home')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <h1>Tridents</h1>
+        </div>
+        <div class="screen-scroll">
+          <div class="team-hero" style="background:linear-gradient(135deg, var(--accent), #b8350f);">
+            <div class="team-hero-rank">01</div>
+            <div class="team-hero-name">TRIDENTS</div>
+            <div class="team-hero-meta">86 PTS · 5W · 1L · 2D</div>
+          </div>
+
+          <div class="section-title">Captains</div>
+          <div class="roster-grid">
+            <div class="player-tile team-t1 is-captain"><div class="avatar">SH</div><div class="pname">SHAH</div><div class="role" style="color:var(--gold)">GROUP CAP</div></div>
+            <div class="player-tile team-t1"><div class="avatar">RV</div><div class="pname">RAVI</div><div class="role" style="color:var(--accent-3)">★ CRICKET</div></div>
+            <div class="player-tile team-t1"><div class="avatar">PR</div><div class="pname">PRIYA</div><div class="role" style="color:var(--accent-3)">★ FOOTBALL</div></div>
+            <div class="player-tile team-t1"><div class="avatar">KR</div><div class="pname">KIRTI</div><div class="role" style="color:var(--accent-3)">★ BADM</div></div>
+          </div>
+
+          <div class="section-title">Roster · 38 Players</div>
+          <div class="roster-grid">
+            <div class="player-tile team-t1"><div class="avatar">AR</div><div class="pname">ARJUN</div></div>
+            <div class="player-tile team-t1"><div class="avatar">VI</div><div class="pname">VIKRAM</div></div>
+            <div class="player-tile team-t1"><div class="avatar">NE</div><div class="pname">NEHA</div></div>
+            <div class="player-tile team-t1"><div class="avatar">AM</div><div class="pname">AMIT</div></div>
+            <div class="player-tile team-t1"><div class="avatar">DI</div><div class="pname">DIYA</div></div>
+            <div class="player-tile team-t1"><div class="avatar">RO</div><div class="pname">ROHAN</div></div>
+            <div class="player-tile team-t1"><div class="avatar">SA</div><div class="pname">SANA</div></div>
+            <div class="player-tile team-t1"><div class="avatar">KA</div><div class="pname">KARTIK</div></div>
+          </div>
+
+          <div class="section-title">Points by Sport</div>
+          <div class="card" style="display:flex;justify-content:space-between;">
+            <div>
+              <div class="lb-sub">FOOTBALL</div>
+              <div class="lb-points" style="font-size:18px;">24 PTS</div>
+            </div>
+            <div>
+              <div class="lb-sub">CRICKET</div>
+              <div class="lb-points" style="font-size:18px;">20 PTS</div>
+            </div>
+            <div>
+              <div class="lb-sub">BADMINTON</div>
+              <div class="lb-points" style="font-size:18px;">18 PTS</div>
+            </div>
+          </div>
+          <div class="card" style="display:flex;justify-content:space-between;">
+            <div>
+              <div class="lb-sub">CHESS</div>
+              <div class="lb-points" style="font-size:18px;">12 PTS</div>
+            </div>
+            <div>
+              <div class="lb-sub">CARROM</div>
+              <div class="lb-points" style="font-size:18px;">8 PTS</div>
+            </div>
+            <div>
+              <div class="lb-sub">BASKETBALL</div>
+              <div class="lb-points" style="font-size:18px;">4 PTS</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ ADMIN: EVENT SETUP ============ -->
+      <div class="screen" id="screen-admin">
+        <div class="back-header">
+          <button class="back-btn" onclick="navigate('home')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <h1>Event Setup · Admin</h1>
+        </div>
+
+        <!-- TAB STRIP -->
+        <div class="admin-tabs">
+          <button class="admin-tab active" data-pane="event">Event</button>
+          <button class="admin-tab" data-pane="teams">Teams</button>
+          <button class="admin-tab" data-pane="sports">Sports</button>
+          <button class="admin-tab" data-pane="referees">Referees</button>
+          <button class="admin-tab" data-pane="rulebook">Rulebook <span class="badge">2</span></button>
+          <button class="admin-tab" data-pane="points">Points</button>
+        </div>
+
+        <div class="screen-scroll">
+          <div class="demo-banner">// ADMIN only · CHEQ Sports '26</div>
+
+          <!-- ============ EVENT PANE ============ -->
+          <div class="admin-pane active" data-pane="event">
+            <div class="form-group">
+              <label class="form-label">Fest Name</label>
+              <input class="input" value="CHEQ Sports '26" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Dates</label>
+              <input class="input" value="Apr 14 — Apr 18, 2026" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Venue</label>
+              <input class="input" value="Bengaluru HQ" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Event Logo</label>
+              <div class="upload-zone has-file">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                <div>logo_2026.svg uploaded · 24 KB</div>
+              </div>
+            </div>
+            <button class="primary-btn">SAVE EVENT</button>
+            <button class="ghost-btn" onclick="navigate('score-entry')">→ Score Entry</button>
+          </div>
+
+          <!-- ============ TEAMS PANE ============ -->
+          <div class="admin-pane" data-pane="teams">
+            <div class="form-group">
+              <label class="form-label">Teams in this Fest</label>
+              <div class="tag-input">
+                <div class="tag">TRIDENTS <span class="x">×</span></div>
+                <div class="tag t2">BLAZERS <span class="x">×</span></div>
+                <div class="tag t3">PHANTOMS <span class="x">×</span></div>
+                <div class="tag t4">VOLTRON <span class="x">×</span></div>
+                <button class="tag-add">+ ADD TEAM</button>
+              </div>
+            </div>
+
+            <div class="section-title">Group Captain Assignments</div>
+            <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div class="lb-flag" style="background:var(--accent)">TR</div>
+                <div>
+                  <div style="font-weight:700;font-size:13px;">TRIDENTS</div>
+                  <div class="lb-sub">Shah Mehta · shah@cheq.one</div>
+                </div>
+              </div>
+              <div class="chip" style="background:var(--gold);color:#000;">★ GCAP</div>
+            </div>
+            <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div class="lb-flag" style="background:var(--accent-2)">BL</div>
+                <div>
+                  <div style="font-weight:700;font-size:13px;">BLAZERS</div>
+                  <div class="lb-sub">— Unassigned —</div>
+                </div>
+              </div>
+              <button class="tag-add">+ ASSIGN</button>
+            </div>
+            <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div class="lb-flag" style="background:var(--accent-3)">PH</div>
+                <div>
+                  <div style="font-weight:700;font-size:13px;">PHANTOMS</div>
+                  <div class="lb-sub">Nia Joseph · nia@cheq.one</div>
+                </div>
+              </div>
+              <div class="chip" style="background:var(--gold);color:#000;">★ GCAP</div>
+            </div>
+            <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div class="lb-flag" style="background:var(--accent-4)">VL</div>
+                <div>
+                  <div style="font-weight:700;font-size:13px;">VOLTRON</div>
+                  <div class="lb-sub">— Unassigned —</div>
+                </div>
+              </div>
+              <button class="tag-add">+ ASSIGN</button>
+            </div>
+
+            <button class="primary-btn">SAVE TEAMS</button>
+          </div>
+
+          <!-- ============ SPORTS PANE ============ -->
+          <div class="admin-pane" data-pane="sports">
+            <div class="form-group">
+              <label class="form-label">Sports in this Fest</label>
+              <div class="tag-input">
+                <div class="tag t2">FOOTBALL <span class="x">×</span></div>
+                <div class="tag t2">CRICKET <span class="x">×</span></div>
+                <div class="tag t2">BADMINTON <span class="x">×</span></div>
+                <div class="tag t2">BASKETBALL <span class="x">×</span></div>
+                <div class="tag t2">CHESS <span class="x">×</span></div>
+                <div class="tag t2">CARROM <span class="x">×</span></div>
+                <button class="tag-add">+ ADD SPORT</button>
+              </div>
+            </div>
+            <div class="demo-banner">// configs (player count, subs, duration) auto-populate from Rulebook tab</div>
+
+            <div class="section-title">Configured Sports · 6</div>
+            <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <div style="font-weight:700;font-size:13px;">FOOTBALL</div>
+                <div class="lb-sub">5 on field · 3 subs · 2 × 15 min</div>
+              </div>
+              <div class="chip" style="background:rgba(232,255,74,0.15);color:var(--accent-2);border:1px solid rgba(232,255,74,0.3);">CONFIGURED</div>
+            </div>
+            <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <div style="font-weight:700;font-size:13px;">CRICKET</div>
+                <div class="lb-sub">7 on field · 2 subs · 6 overs</div>
+              </div>
+              <div class="chip" style="background:rgba(232,255,74,0.15);color:var(--accent-2);border:1px solid rgba(232,255,74,0.3);">CONFIGURED</div>
+            </div>
+            <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <div style="font-weight:700;font-size:13px;">CHESS</div>
+                <div class="lb-sub">2 fields missing · check Rulebook</div>
+              </div>
+              <div class="chip" style="background:rgba(255,74,28,0.15);color:var(--accent);border:1px solid rgba(255,74,28,0.3);">REVIEW</div>
+            </div>
+          </div>
+
+          <!-- ============ REFEREES PANE ============ -->
+          <div class="admin-pane" data-pane="referees">
+            <div class="demo-banner">// assign one or more referees per match · referees punch in live data · any @cheq.one user can be a referee</div>
+
+            <div class="section-title">Eligible Referees · Pool</div>
+            <div class="form-group">
+              <label class="form-label">Add players to referee pool (anyone can be on this list)</label>
+              <div class="tag-input">
+                <div class="tag t3">RAVI K · TRI <span class="x">×</span></div>
+                <div class="tag t3">PRIYA N · TRI <span class="x">×</span></div>
+                <div class="tag t3">NIA J · PHN <span class="x">×</span></div>
+                <div class="tag t3">DEV M · PHN <span class="x">×</span></div>
+                <div class="tag t3">AMIT S · BLZ <span class="x">×</span></div>
+                <div class="tag t3">MEERA V · VOL <span class="x">×</span></div>
+                <button class="tag-add">+ ADD FROM ROSTER</button>
+              </div>
+            </div>
+
+            <div class="section-title">Per-Match Assignments</div>
+
+            <div class="ref-assign-card">
+              <div class="ref-assign-head">
+                <div>
+                  <div class="ref-assign-title">FOOTBALL · TRI vs PHN</div>
+                  <div class="ref-assign-meta">TODAY · 4:30 PM · GROUND A</div>
+                </div>
+                <div class="chip live">LIVE</div>
+              </div>
+              <div class="ref-assign-list">
+                <div class="ref-chip assigned">
+                  <div class="avatar-mini">AM</div>
+                  AMIT S · BLZ
+                  <span class="x">×</span>
+                </div>
+                <div class="ref-chip assigned">
+                  <div class="avatar-mini" style="background:var(--accent-4)">ME</div>
+                  MEERA V · VOL
+                  <span class="x">×</span>
+                </div>
+                <button class="tag-add">+ ADD REFEREE</button>
+              </div>
+            </div>
+
+            <div class="ref-assign-card">
+              <div class="ref-assign-head">
+                <div>
+                  <div class="ref-assign-title">CRICKET · BLZ vs VOL</div>
+                  <div class="ref-assign-meta">TODAY · 5:30 PM · OVAL</div>
+                </div>
+                <div class="chip upcoming">5:30 PM</div>
+              </div>
+              <div class="ref-assign-list">
+                <div class="ref-chip assigned">
+                  <div class="avatar-mini">RV</div>
+                  RAVI K · TRI
+                  <span class="x">×</span>
+                </div>
+                <div class="ref-chip assigned">
+                  <div class="avatar-mini" style="background:var(--accent-3)">NI</div>
+                  NIA J · PHN
+                  <span class="x">×</span>
+                </div>
+                <div class="ref-chip assigned">
+                  <div class="avatar-mini" style="background:var(--accent-3)">DV</div>
+                  DEV M · PHN
+                  <span class="x">×</span>
+                </div>
+                <button class="tag-add">+ ADD REFEREE</button>
+              </div>
+            </div>
+
+            <div class="ref-assign-card">
+              <div class="ref-assign-head">
+                <div>
+                  <div class="ref-assign-title">BADMINTON · TRI vs BLZ</div>
+                  <div class="ref-assign-meta">TOMORROW · 11:00 AM · COURT 2</div>
+                </div>
+                <div class="chip upcoming">TOMORROW</div>
+              </div>
+              <div class="ref-assign-list">
+                <button class="tag-add">+ ADD REFEREE</button>
+              </div>
+            </div>
+
+            <div class="ref-assign-card">
+              <div class="ref-assign-head">
+                <div>
+                  <div class="ref-assign-title">CHESS · ALL TEAMS</div>
+                  <div class="ref-assign-meta">TOMORROW · 3:00 PM · LOUNGE</div>
+                </div>
+                <div class="chip upcoming">TOMORROW</div>
+              </div>
+              <div class="ref-assign-list">
+                <div class="ref-chip assigned">
+                  <div class="avatar-mini" style="background:var(--accent-2)">PR</div>
+                  PRIYA N · TRI
+                  <span class="x">×</span>
+                </div>
+                <button class="tag-add">+ ADD REFEREE</button>
+              </div>
+            </div>
+
+            <button class="primary-btn">SAVE REFEREE ASSIGNMENTS</button>
+          </div>
+
+          <!-- ============ RULEBOOK PANE ============ -->
+          <div class="admin-pane" data-pane="rulebook">
+            <div class="section-title">Rulebook · AI Parser</div>
+            <div class="tab-switch">
+              <button class="active" data-rbtab="upload">Upload PDF</button>
+              <button data-rbtab="paste">Paste Text</button>
+            </div>
+
+            <div id="rbtab-upload">
+              <div class="upload-zone has-file" style="margin-bottom:8px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+                <div>CHEQ_Fest_Rulebook_v3.pdf · 1.2 MB</div>
+              </div>
+            </div>
+
+            <div id="rbtab-paste" style="display:none;">
+              <textarea class="textarea" placeholder="Paste rulebook text here...">FOOTBALL — 5-a-side. 2 halves of 15 min. Roll subs (3 max). Win = 8 pts, Draw = 3 pts.&#10;CRICKET — Box cricket, 6 overs, 7 players per side. 2 subs allowed. Win = 10 pts.</textarea>
+            </div>
+
+            <div class="ai-status">
+              <div class="ai-spinner"></div>
+              <div>// claude parsed 6 sports · 2 fields need your input</div>
+            </div>
+
+            <div class="parsed-card">
+              <div class="parsed-head">
+                <div class="parsed-sport">Football</div>
+                <div class="parsed-conf">high confidence</div>
+              </div>
+              <div class="parsed-grid">
+                <div class="parsed-field"><label>Players on Field</label><input value="5" /></div>
+                <div class="parsed-field"><label>Substitutes</label><input value="3" /></div>
+                <div class="parsed-field"><label>Win Points</label><input value="8" /></div>
+                <div class="parsed-field"><label>Duration</label><input value="2 × 15 min" /></div>
+              </div>
+            </div>
+            <div class="parsed-card">
+              <div class="parsed-head">
+                <div class="parsed-sport">Cricket</div>
+                <div class="parsed-conf">high confidence</div>
+              </div>
+              <div class="parsed-grid">
+                <div class="parsed-field"><label>Players on Field</label><input value="7" /></div>
+                <div class="parsed-field"><label>Substitutes</label><input value="2" /></div>
+                <div class="parsed-field"><label>Win Points</label><input value="10" /></div>
+                <div class="parsed-field"><label>Overs</label><input value="6" /></div>
+              </div>
+            </div>
+            <div class="parsed-card">
+              <div class="parsed-head">
+                <div class="parsed-sport">Chess</div>
+                <div class="parsed-conf warn">needs review</div>
+              </div>
+              <div class="parsed-grid">
+                <div class="parsed-field"><label>Players on Field</label><input value="2" /></div>
+                <div class="parsed-field missing"><label>Substitutes</label><input placeholder="not found — fill in" /></div>
+                <div class="parsed-field"><label>Win Points</label><input value="5" /></div>
+                <div class="parsed-field missing"><label>Time Control</label><input placeholder="not found — fill in" /></div>
+              </div>
+            </div>
+
+            <button class="primary-btn">CONFIRM PARSED CONFIG</button>
+          </div>
+
+          <!-- ============ POINTS PANE ============ -->
+          <div class="admin-pane" data-pane="points">
+            <div class="demo-banner">// auto-populated from rulebook · admin can override</div>
+            <div class="section-title">Points Configuration</div>
+            <div class="points-table">
+              <div class="points-row header">
+                <div>SPORT</div><div>WIN</div><div>DRAW</div><div>LOSS</div>
+              </div>
+              <div class="points-row"><div class="sport-cell">Football</div><input value="8"/><input value="3"/><input value="0"/></div>
+              <div class="points-row"><div class="sport-cell">Cricket</div><input value="10"/><input value="4"/><input value="0"/></div>
+              <div class="points-row"><div class="sport-cell">Badminton</div><input value="6"/><input value="2"/><input value="0"/></div>
+              <div class="points-row"><div class="sport-cell">Basketball</div><input value="6"/><input value="2"/><input value="0"/></div>
+              <div class="points-row"><div class="sport-cell">Chess</div><input value="5"/><input value="2"/><input value="0"/></div>
+              <div class="points-row"><div class="sport-cell">Carrom</div><input value="4"/><input value="2"/><input value="0"/></div>
+            </div>
+            <button class="primary-btn">SAVE POINTS</button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ============ ADMIN: SCORE ENTRY ============ -->
+      <div class="screen" id="screen-score-entry">
+        <div class="back-header">
+          <button class="back-btn" onclick="navigate('admin')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <h1>Match Result · Admin</h1>
+        </div>
+        <div class="screen-scroll">
+          <div class="demo-banner">// only ADMIN can post results · points auto-applied to leaderboard</div>
+
+          <div class="form-group">
+            <label class="form-label">Sport</label>
+            <select class="select"><option>Football</option><option>Cricket</option></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Match</label>
+            <select class="select"><option>Tridents vs Phantoms · 23' 1H</option></select>
+          </div>
+
+          <div class="score-input-row">
+            <div class="score-team">
+              <div class="score-team-name" style="color:var(--accent);">TRIDENTS</div>
+              <input class="score-input" value="2" />
+            </div>
+            <div class="score-vs">—</div>
+            <div class="score-team">
+              <div class="score-team-name" style="color:var(--accent-3);">PHANTOMS</div>
+              <input class="score-input" value="1" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Status</label>
+            <select class="select"><option>Live · 1st Half</option><option>Live · 2nd Half</option><option>Final</option></select>
+          </div>
+
+          <button class="primary-btn">POST UPDATE · LIVE</button>
+          <button class="ghost-btn">SAVE AS DRAFT</button>
+        </div>
+      </div>
+
+      <!-- ============ GROUP CAPTAIN: TEAM MGMT ============ -->
+      <div class="screen" id="screen-team-mgmt">
+        <div class="back-header">
+          <button class="back-btn" onclick="navigate('home')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <h1>Manage Team · Tridents</h1>
+        </div>
+        <div class="screen-scroll">
+          <div class="demo-banner">// GROUP CAP view · assign sport captains & vice captain</div>
+
+          <div class="section-title">Vice Captain</div>
+          <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div class="lb-flag" style="background:var(--accent);">RV</div>
+              <div>
+                <div style="font-weight:700;">Ravi Kumar</div>
+                <div class="lb-sub">ravi@cheq.one</div>
+              </div>
+            </div>
+            <button class="tag-add">CHANGE</button>
+          </div>
+
+          <div class="section-title">Sport Captains</div>
+          <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-weight:700;font-size:13px;">FOOTBALL</div>
+              <div class="lb-sub">Priya Nair · priya@cheq.one</div>
+            </div>
+            <div class="chip" style="background:var(--accent-3);color:#000;">★ SCAP</div>
+          </div>
+          <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-weight:700;font-size:13px;">CRICKET</div>
+              <div class="lb-sub">Ravi Kumar · ravi@cheq.one</div>
+            </div>
+            <div class="chip" style="background:var(--accent-3);color:#000;">★ SCAP</div>
+          </div>
+          <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-weight:700;font-size:13px;">BASKETBALL</div>
+              <div class="lb-sub">— Unassigned —</div>
+            </div>
+            <button class="tag-add">+ ASSIGN</button>
+          </div>
+          <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-weight:700;font-size:13px;">CHESS</div>
+              <div class="lb-sub">— Unassigned —</div>
+            </div>
+            <button class="tag-add">+ ASSIGN</button>
+          </div>
+
+          <button class="primary-btn">SAVE ASSIGNMENTS</button>
+        </div>
+      </div>
+
+      <!-- ============ SPORT CAPTAIN: LINEUP ============ -->
+      <div class="screen" id="screen-lineup">
+        <div class="back-header">
+          <button class="back-btn" onclick="navigate('home')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <h1>Football Lineup · Tridents</h1>
+        </div>
+        <div class="screen-scroll">
+          <div class="demo-banner">// SPORT CAP view · drag players between buckets · captain locked in On The Pitch · empty pitch slots allowed (sport-cap discretion)</div>
+
+          <!-- ON THE PITCH -->
+          <div class="lineup-section bucket-pitch" data-bucket="pitch">
+            <div class="lineup-head">
+              <div class="lineup-name"><span class="marker" style="background:var(--accent-2)"></span>On The Pitch</div>
+              <div class="lineup-count final" id="count-pitch">4 / 5</div>
+            </div>
+            <div class="drag-grid" data-bucket="pitch">
+              <div class="drag-tile team-t1 is-captain" draggable="false" data-player="shah" data-locked="true">
+                <div class="avatar">SH</div><div class="pname">SHAH</div>
+              </div>
+              <div class="drag-tile team-t1" draggable="true" data-player="ravi">
+                <div class="avatar">RV</div><div class="pname">RAVI</div>
+              </div>
+              <div class="drag-tile team-t1" draggable="true" data-player="kirti">
+                <div class="avatar">KR</div><div class="pname">KIRTI</div>
+              </div>
+              <div class="drag-tile team-t1" draggable="true" data-player="arjun">
+                <div class="avatar">AR</div><div class="pname">ARJUN</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TENTATIVE -->
+          <div class="lineup-section bucket-tent" data-bucket="tentative">
+            <div class="lineup-head">
+              <div class="lineup-name"><span class="marker" style="background:var(--accent-3)"></span>Tentatively Playing</div>
+              <div class="lineup-count tent" id="count-tent">3</div>
+            </div>
+            <div class="drag-grid" data-bucket="tentative">
+              <div class="drag-tile team-t1" draggable="true" data-player="priya">
+                <div class="avatar">PR</div><div class="pname">PRIYA</div>
+              </div>
+              <div class="drag-tile team-t1" draggable="true" data-player="vikram">
+                <div class="avatar">VI</div><div class="pname">VIKRAM</div>
+              </div>
+              <div class="drag-tile team-t1" draggable="true" data-player="neha">
+                <div class="avatar">NE</div><div class="pname">NEHA</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUBSTITUTES -->
+          <div class="lineup-section bucket-sub" data-bucket="substitutes">
+            <div class="lineup-head">
+              <div class="lineup-name"><span class="marker" style="background:var(--ink-dim)"></span>Substitutes</div>
+              <div class="lineup-count sub" id="count-sub">3</div>
+            </div>
+            <div class="drag-grid" data-bucket="substitutes">
+              <div class="drag-tile team-t1" draggable="true" data-player="amit">
+                <div class="avatar">AM</div><div class="pname">AMIT</div>
+              </div>
+              <div class="drag-tile team-t1" draggable="true" data-player="diya">
+                <div class="avatar">DI</div><div class="pname">DIYA</div>
+              </div>
+              <div class="drag-tile team-t1" draggable="true" data-player="rohan">
+                <div class="avatar">RO</div><div class="pname">ROHAN</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- NOT PLAYING -->
+          <div class="lineup-section bucket-out" data-bucket="out">
+            <div class="lineup-head">
+              <div class="lineup-name"><span class="marker" style="background:var(--accent)"></span>Not Playing</div>
+              <div class="lineup-count out" id="count-out">5</div>
+            </div>
+            <div class="drag-grid" data-bucket="out">
+              <div class="drag-tile team-t1" draggable="true" data-player="sana">
+                <div class="avatar">SA</div><div class="pname">SANA</div>
+              </div>
+              <div class="drag-tile team-t1" draggable="true" data-player="kartik">
+                <div class="avatar">KA</div><div class="pname">KARTIK</div>
+              </div>
+              <div class="drag-tile team-t1" draggable="true" data-player="meera">
+                <div class="avatar">ME</div><div class="pname">MEERA</div>
+              </div>
+              <div class="drag-tile team-t1" draggable="true" data-player="dev">
+                <div class="avatar">DV</div><div class="pname">DEV</div>
+              </div>
+              <div class="drag-tile team-t1" draggable="true" data-player="ishaan">
+                <div class="avatar">IS</div><div class="pname">ISHAAN</div>
+              </div>
+            </div>
+          </div>
+
+          <button class="primary-btn">SAVE LINEUP</button>
+        </div>
+      </div>
+
+      <!-- ============ REFEREE SCREEN ============ -->
+      <div class="screen" id="screen-referee">
+        <div class="back-header">
+          <button class="back-btn" onclick="navigate('home')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <h1>Referee Console</h1>
+        </div>
+
+        <div class="screen-scroll">
+          <!-- Match switcher (ref may cover multiple) -->
+          <div class="ref-match-switcher">
+            <button class="ref-match-pill active" data-refmatch="football">
+              <span class="dot"></span>FOOTBALL · TRI vs PHN
+            </button>
+            <button class="ref-match-pill" data-refmatch="cricket">
+              CRICKET · BLZ vs VOL
+            </button>
+            <button class="ref-match-pill" data-refmatch="badminton">
+              BADMINTON · TRI vs BLZ
+            </button>
+            <button class="ref-match-pill" data-refmatch="chess">
+              CHESS · ALL TEAMS
+            </button>
+          </div>
+
+          <!-- HEADER -->
+          <div class="ref-header">
+            <div class="ref-badge"><span class="pulse-dot"></span>YOU ARE REFEREEING · LIVE</div>
+            <div class="ref-match" id="refMatchTitle">TRIDENTS <span class="vs-text">VS</span> PHANTOMS</div>
+            <div class="ref-sport-line" id="refSportLine">FOOTBALL · GROUND A · ASSIGNED BY ADMIN</div>
+          </div>
+
+          <!-- SCOREBOARD with +/- -->
+          <div class="ref-scoreboard">
+            <div class="ref-score-row">
+              <div class="ref-side team-t1">
+                <div class="ref-side-name">TRIDENTS</div>
+                <div class="ref-side-score" data-score="t1">2</div>
+                <div class="ref-side-controls">
+                  <button class="ref-pm" data-adj="t1" data-delta="-1">−</button>
+                  <button class="ref-pm plus" data-adj="t1" data-delta="1">+</button>
+                </div>
+              </div>
+              <div class="ref-clock">
+                <div class="ref-clock-time" id="refClock">23:04</div>
+                <div class="ref-clock-label" id="refClockLabel">1ST HALF</div>
+                <div class="ref-clock-controls">
+                  <button class="ref-clock-btn playing" id="refClockToggle" title="Pause/Play">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                  </button>
+                  <button class="ref-clock-btn" id="refClockReset" title="Reset">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="ref-side team-t2">
+                <div class="ref-side-name">PHANTOMS</div>
+                <div class="ref-side-score" data-score="t2">1</div>
+                <div class="ref-side-controls">
+                  <button class="ref-pm" data-adj="t2" data-delta="-1">−</button>
+                  <button class="ref-pm plus" data-adj="t2" data-delta="1">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SPORT-SPECIFIC PUNCH PANES -->
+
+          <!-- FOOTBALL -->
+          <div class="ref-pane" data-refpane="football">
+            <div class="section-title">Quick Events</div>
+            <div class="punch-grid">
+              <button class="punch-btn lime" onclick="logRefEvent('goal-t1')">
+                <div class="punch-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 6L8 11l4 6 4-6z"/></svg>
+                </div>
+                <div class="punch-label">+ GOAL · TRI</div>
+                <div class="punch-sub">tap to log + 1</div>
+              </button>
+              <button class="punch-btn cyan" onclick="logRefEvent('goal-t2')">
+                <div class="punch-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 6L8 11l4 6 4-6z"/></svg>
+                </div>
+                <div class="punch-label">+ GOAL · PHN</div>
+                <div class="punch-sub">tap to log + 1</div>
+              </button>
+              <button class="punch-btn" onclick="logRefEvent('yellow')">
+                <div class="punch-icon" style="color:#f5c542;background:rgba(245,197,66,0.1)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="3" width="14" height="18" rx="2"/></svg>
+                </div>
+                <div class="punch-label">YELLOW</div>
+                <div class="punch-sub">caution</div>
+              </button>
+              <button class="punch-btn warn" onclick="logRefEvent('red')">
+                <div class="punch-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="3" width="14" height="18" rx="2"/></svg>
+                </div>
+                <div class="punch-label">RED</div>
+                <div class="punch-sub">send off</div>
+              </button>
+              <button class="punch-btn" onclick="logRefEvent('foul')">
+                <div class="punch-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
+                </div>
+                <div class="punch-label">FOUL</div>
+                <div class="punch-sub">free kick</div>
+              </button>
+              <button class="punch-btn pink" onclick="logRefEvent('sub')">
+                <div class="punch-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                </div>
+                <div class="punch-label">SUB</div>
+                <div class="punch-sub">player swap</div>
+              </button>
+            </div>
+
+            <div class="section-title">Half / Extra Time</div>
+            <div class="counter-card">
+              <div class="counter-info">
+                <div class="counter-label">Half</div>
+                <div class="counter-sub">currently 1st half · tap to switch</div>
+              </div>
+              <div class="counter-controls">
+                <button class="ref-pm" onclick="cycleHalf()">↻</button>
+                <div class="counter-value" id="halfValue">1H</div>
+              </div>
+            </div>
+            <div class="counter-card">
+              <div class="counter-info">
+                <div class="counter-label">Extra Time</div>
+                <div class="counter-sub">added at end of half · in minutes</div>
+              </div>
+              <div class="counter-controls">
+                <button class="ref-pm" data-counter="extra" data-delta="-1">−</button>
+                <div class="counter-value" id="extraValue">+2</div>
+                <button class="ref-pm plus" data-counter="extra" data-delta="1">+</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- CRICKET (hidden by default) -->
+          <div class="ref-pane" data-refpane="cricket" style="display:none;">
+            <div class="section-title">Ball-by-Ball</div>
+            <div class="punch-grid three">
+              <button class="punch-btn lime" onclick="logRefEvent('run-0')">
+                <div class="punch-label">0</div>
+                <div class="punch-sub">dot ball</div>
+              </button>
+              <button class="punch-btn lime" onclick="logRefEvent('run-1')">
+                <div class="punch-label">1</div>
+                <div class="punch-sub">single</div>
+              </button>
+              <button class="punch-btn lime" onclick="logRefEvent('run-2')">
+                <div class="punch-label">2</div>
+                <div class="punch-sub">double</div>
+              </button>
+              <button class="punch-btn cyan" onclick="logRefEvent('run-4')">
+                <div class="punch-label">4</div>
+                <div class="punch-sub">boundary</div>
+              </button>
+              <button class="punch-btn cyan" onclick="logRefEvent('run-6')">
+                <div class="punch-label">6</div>
+                <div class="punch-sub">six</div>
+              </button>
+              <button class="punch-btn warn" onclick="logRefEvent('wicket')">
+                <div class="punch-label">W</div>
+                <div class="punch-sub">wicket</div>
+              </button>
+              <button class="punch-btn pink" onclick="logRefEvent('wide')">
+                <div class="punch-label">WD</div>
+                <div class="punch-sub">wide</div>
+              </button>
+              <button class="punch-btn pink" onclick="logRefEvent('nb')">
+                <div class="punch-label">NB</div>
+                <div class="punch-sub">no-ball</div>
+              </button>
+              <button class="punch-btn pink" onclick="logRefEvent('bye')">
+                <div class="punch-label">B/LB</div>
+                <div class="punch-sub">bye/leg-bye</div>
+              </button>
+            </div>
+
+            <div class="section-title">State</div>
+            <div class="counter-card">
+              <div class="counter-info">
+                <div class="counter-label">Over</div>
+                <div class="counter-sub">tap +1 each over · auto resets balls</div>
+              </div>
+              <div class="counter-controls">
+                <button class="ref-pm" data-counter="over" data-delta="-1">−</button>
+                <div class="counter-value">3</div>
+                <button class="ref-pm plus" data-counter="over" data-delta="1">+</button>
+              </div>
+            </div>
+            <div class="counter-card">
+              <div class="counter-info">
+                <div class="counter-label">Balls in Over</div>
+                <div class="counter-sub">resets at 6 · wides/no-balls don't count</div>
+              </div>
+              <div class="counter-controls">
+                <button class="ref-pm" data-counter="balls" data-delta="-1">−</button>
+                <div class="counter-value">4</div>
+                <button class="ref-pm plus" data-counter="balls" data-delta="1">+</button>
+              </div>
+            </div>
+            <div class="counter-card">
+              <div class="counter-info">
+                <div class="counter-label">Innings</div>
+                <div class="counter-sub">currently batting: BLAZERS</div>
+              </div>
+              <div class="counter-controls">
+                <button class="ref-pm" onclick="cycleInnings()">↻</button>
+                <div class="counter-value">1ST</div>
+              </div>
+            </div>
+            <div class="counter-card">
+              <div class="counter-info">
+                <div class="counter-label">Wickets</div>
+                <div class="counter-sub">current innings</div>
+              </div>
+              <div class="counter-controls">
+                <button class="ref-pm" data-counter="wickets" data-delta="-1">−</button>
+                <div class="counter-value">2</div>
+                <button class="ref-pm plus" data-counter="wickets" data-delta="1">+</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- BADMINTON (hidden by default) -->
+          <div class="ref-pane" data-refpane="badminton" style="display:none;">
+            <div class="section-title">State</div>
+            <div class="counter-card">
+              <div class="counter-info">
+                <div class="counter-label">Game</div>
+                <div class="counter-sub">best of 3 · tridents lead 1-0</div>
+              </div>
+              <div class="counter-controls">
+                <button class="ref-pm" data-counter="game" data-delta="-1">−</button>
+                <div class="counter-value">2</div>
+                <button class="ref-pm plus" data-counter="game" data-delta="1">+</button>
+              </div>
+            </div>
+            <div class="counter-card">
+              <div class="counter-info">
+                <div class="counter-label">Service</div>
+                <div class="counter-sub">currently serving: TRIDENTS</div>
+              </div>
+              <div class="counter-controls">
+                <button class="ref-pm" onclick="cycleService()">↻</button>
+                <div class="counter-value">TRI</div>
+              </div>
+            </div>
+            <div class="section-title">Flags</div>
+            <div class="punch-grid">
+              <button class="punch-btn" onclick="logRefEvent('let')">
+                <div class="punch-label">LET</div>
+                <div class="punch-sub">replay rally</div>
+              </button>
+              <button class="punch-btn warn" onclick="logRefEvent('fault')">
+                <div class="punch-label">FAULT</div>
+                <div class="punch-sub">service fault</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- CHESS (hidden by default) -->
+          <div class="ref-pane" data-refpane="chess" style="display:none;">
+            <div class="section-title">Match State</div>
+            <div class="counter-card">
+              <div class="counter-info">
+                <div class="counter-label">Board</div>
+                <div class="counter-sub">currently overseeing</div>
+              </div>
+              <div class="counter-controls">
+                <button class="ref-pm" data-counter="board" data-delta="-1">−</button>
+                <div class="counter-value">3</div>
+                <button class="ref-pm plus" data-counter="board" data-delta="1">+</button>
+              </div>
+            </div>
+            <div class="counter-card">
+              <div class="counter-info">
+                <div class="counter-label">Move</div>
+                <div class="counter-sub">total moves played</div>
+              </div>
+              <div class="counter-controls">
+                <button class="ref-pm" data-counter="move" data-delta="-1">−</button>
+                <div class="counter-value">24</div>
+                <button class="ref-pm plus" data-counter="move" data-delta="1">+</button>
+              </div>
+            </div>
+            <div class="section-title">Result</div>
+            <div class="punch-grid three">
+              <button class="punch-btn lime" onclick="logRefEvent('chess-w-win')">
+                <div class="punch-label">1 - 0</div>
+                <div class="punch-sub">white wins</div>
+              </button>
+              <button class="punch-btn" onclick="logRefEvent('chess-draw')">
+                <div class="punch-label">½ - ½</div>
+                <div class="punch-sub">draw</div>
+              </button>
+              <button class="punch-btn cyan" onclick="logRefEvent('chess-b-win')">
+                <div class="punch-label">0 - 1</div>
+                <div class="punch-sub">black wins</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- LIVE LOG -->
+          <div class="section-title">Live Log · <a class="more" id="logClear">CLEAR →</a></div>
+          <div class="ref-log" id="refLog">
+            <div class="ref-log-item">
+              <div class="ref-log-time">23'</div>
+              <div class="ref-log-desc"><span class="hl-t1">TRIDENTS</span> goal · Arjun</div>
+              <button class="ref-log-undo">UNDO</button>
+            </div>
+            <div class="ref-log-item">
+              <div class="ref-log-time">17'</div>
+              <div class="ref-log-desc">Yellow card · <span class="hl-t2">PHN</span> · Raj</div>
+              <button class="ref-log-undo">UNDO</button>
+            </div>
+            <div class="ref-log-item">
+              <div class="ref-log-time">11'</div>
+              <div class="ref-log-desc"><span class="hl-t2">PHANTOMS</span> goal · Dev</div>
+              <button class="ref-log-undo">UNDO</button>
+            </div>
+            <div class="ref-log-item">
+              <div class="ref-log-time">04'</div>
+              <div class="ref-log-desc"><span class="hl-t1">TRIDENTS</span> goal · Priya</div>
+              <button class="ref-log-undo">UNDO</button>
+            </div>
+            <div class="ref-log-item">
+              <div class="ref-log-time">00'</div>
+              <div class="ref-log-desc">Match started · 1st half kickoff</div>
+              <button class="ref-log-undo">UNDO</button>
+            </div>
+          </div>
+
+          <!-- BOTTOM ACTION BAR -->
+          <div class="ref-action-bar">
+            <button class="ghost-btn">END HALF</button>
+            <button class="primary-btn">FINAL · END MATCH</button>
+          </div>
+          <div style="height:20px;"></div>
+        </div>
+      </div>
+
+      <!-- ============ RULEBOOK SCREEN ============ -->
+      <div class="screen" id="screen-rulebook">
+        <div class="back-header">
+          <button class="back-btn" onclick="navigate('home')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <h1>Rulebook & Points</h1>
+        </div>
+        <div class="screen-scroll">
+          <div class="rulebook-card">
+            <div class="pdf-icon">PDF</div>
+            <div class="rulebook-info">
+              <div class="rulebook-title">CHEQ Fest 2026 — Rulebook</div>
+              <div class="rulebook-meta">v3 · 1.2 MB · Updated Apr 10</div>
+            </div>
+          </div>
+
+          <div class="section-title">Points System</div>
+          <div class="points-table" style="margin-bottom:24px;">
+            <div class="points-row header"><div>SPORT</div><div>WIN</div><div>DRAW</div><div>LOSS</div></div>
+            <div class="points-row"><div class="sport-cell">Football</div><input value="8" readonly/><input value="3" readonly/><input value="0" readonly/></div>
+            <div class="points-row"><div class="sport-cell">Cricket</div><input value="10" readonly/><input value="4" readonly/><input value="0" readonly/></div>
+            <div class="points-row"><div class="sport-cell">Badminton</div><input value="6" readonly/><input value="2" readonly/><input value="0" readonly/></div>
+            <div class="points-row"><div class="sport-cell">Basketball</div><input value="6" readonly/><input value="2" readonly/><input value="0" readonly/></div>
+            <div class="points-row"><div class="sport-cell">Chess</div><input value="5" readonly/><input value="2" readonly/><input value="0" readonly/></div>
+            <div class="points-row"><div class="sport-cell">Carrom</div><input value="4" readonly/><input value="2" readonly/><input value="0" readonly/></div>
+          </div>
+
+          <div class="section-title">Quick Rules</div>
+          <div class="rule-section">
+            <div>
+              <div class="rule-section-title">Football</div>
+              <div class="rule-section-sub">5-a-side · 2 × 15 min · roll subs</div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink-dim)" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+          </div>
+          <div class="rule-section">
+            <div>
+              <div class="rule-section-title">Cricket</div>
+              <div class="rule-section-sub">Box cricket · 6 overs · 7 players</div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink-dim)" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+          </div>
+          <div class="rule-section">
+            <div>
+              <div class="rule-section-title">Badminton</div>
+              <div class="rule-section-sub">Doubles · Best of 3 · 21 pts</div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink-dim)" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+          </div>
+          <div class="rule-section">
+            <div>
+              <div class="rule-section-title">Code of Conduct</div>
+              <div class="rule-section-sub">Fair play · no abusive language · ref's call is final</div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--ink-dim)" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ BOTTOM TAB BAR ============ -->
+      <div class="tabbar" id="tabbar">
+        <button class="tab active" data-screen="home" onclick="navigate('home')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>
+          Home
+        </button>
+        <button class="tab" data-screen="arena" onclick="navigate('arena')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3v18"/></svg>
+          Arena
+        </button>
+        <button class="tab" data-screen="leaderboard" onclick="navigate('leaderboard')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 20V10M12 20V4M18 20v-7"/></svg>
+          Board
+        </button>
+        <button class="tab" data-screen="rulebook" onclick="navigate('rulebook')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4a2 2 0 0 1 2-2h10l4 4v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4z"/></svg>
+          Rules
+        </button>
+        <button class="tab" data-screen="login" onclick="navigateByRole()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+          Me
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // SCREEN NAVIGATION
+  function navigate(screen) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById('screen-' + screen);
+    if (el) el.classList.add('active');
+    // tab highlight — Me tab covers both login and profile
+    const meScreens = ['login', 'profile'];
+    const tabKey = meScreens.includes(screen) ? 'login' : screen;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.screen === tabKey));
+    // scroll-to-top on screen change
+    const scrollEl = el && el.querySelector('.screen-scroll');
+    if (scrollEl) scrollEl.scrollTop = 0;
+  }
+
+  // ROLE-AWARE "ME" TAB — guests see login, logged-in users see profile
+  let currentRole = 'guest';
+  function navigateByRole() {
+    if (currentRole === 'guest') {
+      navigate('login');
+    } else {
+      renderProfile();
+      navigate('profile');
+    }
+  }
+
+  // Profile content updates based on current role
+  function renderProfile() {
+    const roleBadges = document.getElementById('profileRoles');
+    const quickActions = document.getElementById('quickActions');
+    const avatar = document.getElementById('profileAvatar');
+    const name = document.getElementById('profileName');
+    const email = document.getElementById('profileEmail');
+    const team = document.getElementById('profileTeam');
+
+    // Default identity per role (demo data)
+    const identities = {
+      player:      { initials: 'AR', name: 'ARJUN PATEL',   email: 'arjun@cheq.one',  team: 'TRIDENTS · MEMBER',       captain: false },
+      referee:     { initials: 'AM', name: 'AMIT SHARMA',   email: 'amit@cheq.one',   team: 'BLAZERS · REFEREE TODAY', captain: false },
+      'sport-cap': { initials: 'PR', name: 'PRIYA NAIR',    email: 'priya@cheq.one',  team: 'TRIDENTS · FOOTBALL CAP', captain: true  },
+      'group-cap': { initials: 'SH', name: 'SHAH MEHTA',    email: 'shah@cheq.one',   team: 'TRIDENTS · GROUP CAP',    captain: true  },
+      admin:       { initials: 'AD', name: 'ADMIN CONSOLE', email: 'admin@cheq.one',  team: 'ORGANIZER',               captain: false }
+    };
+    const id = identities[currentRole] || identities.player;
+    avatar.textContent = id.initials;
+    name.textContent = id.name;
+    email.textContent = id.email;
+    team.textContent = id.team;
+    avatar.classList.toggle('is-captain', id.captain);
+
+    // Role badges
+    const badgeMap = {
+      player:      [['player', 'Player']],
+      referee:     [['player', 'Player'], ['sport-cap', '🟡 Referee · 2 matches']],
+      'sport-cap': [['player', 'Player'], ['sport-cap', '★ Sport Captain']],
+      'group-cap': [['player', 'Player'], ['group-cap', '★ Group Captain']],
+      admin:       [['admin', '⚡ Admin']]
+    };
+    roleBadges.innerHTML = (badgeMap[currentRole] || badgeMap.player)
+      .map(([cls, label]) => `<span class="role-badge ${cls}">${label}</span>`).join('');
+
+    // Reset quick actions to default (My Team, Live Now), then append role-specific
+    quickActions.innerHTML = `
+      <button class="qaction" onclick="navigate('team')">
+        <div class="qaction-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+        <div class="qaction-label">My Team</div>
+        <div class="qaction-sub">Tridents · #1</div>
+      </button>
+      <button class="qaction" onclick="navigate('arena')">
+        <div class="qaction-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3v18"/></svg></div>
+        <div class="qaction-label">Live Now</div>
+        <div class="qaction-sub">Football · 2-1</div>
+      </button>
+    `;
+
+    const roleActions = {
+      referee: `
+        <button class="qaction primary" onclick="navigate('referee')">
+          <div class="qaction-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></div>
+          <div class="qaction-label">Referee Console</div>
+          <div class="qaction-sub">Football · TRI vs PHN · LIVE</div>
+        </button>
+      `,
+      'sport-cap': `
+        <button class="qaction cyan" onclick="navigate('lineup')">
+          <div class="qaction-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+          <div class="qaction-label">Edit Lineup</div>
+          <div class="qaction-sub">Football · Tridents</div>
+        </button>
+      `,
+      'group-cap': `
+        <button class="qaction gold" onclick="navigate('team-mgmt')">
+          <div class="qaction-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="M19 8l2 2-2 2M21 10h-4"/></svg></div>
+          <div class="qaction-label">Manage Team</div>
+          <div class="qaction-sub">Assign sport captains</div>
+        </button>
+      `,
+      admin: `
+        <button class="qaction primary" onclick="navigate('admin')">
+          <div class="qaction-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></div>
+          <div class="qaction-label">Event Setup</div>
+          <div class="qaction-sub">Edit · Teams · Sports</div>
+        </button>
+        <button class="qaction primary" onclick="navigate('score-entry')">
+          <div class="qaction-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg></div>
+          <div class="qaction-label">Post Score</div>
+          <div class="qaction-sub">Live match update</div>
+        </button>
+      `
+    };
+    if (roleActions[currentRole]) {
+      quickActions.insertAdjacentHTML('beforeend', roleActions[currentRole]);
+    }
+  }
+
+  // ROLE SWITCHER (demo)
+  document.getElementById('roleSwitcher').addEventListener('click', (e) => {
+    if (e.target.tagName !== 'BUTTON') return;
+    document.querySelectorAll('#roleSwitcher button').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    currentRole = e.target.dataset.role;
+    // If profile is currently visible, re-render with the new role
+    if (document.getElementById('screen-profile').classList.contains('active')) {
+      renderProfile();
+    }
+  });
+
+  // ============ DRAG & DROP LINEUP ============
+  let draggedEl = null;
+
+  function updateCounts() {
+    const map = { pitch: 'count-pitch', tentative: 'count-tent', substitutes: 'count-sub', out: 'count-out' };
+    Object.entries(map).forEach(([bucket, id]) => {
+      const grid = document.querySelector(`.drag-grid[data-bucket="${bucket}"]`);
+      if (!grid) return;
+      const n = grid.querySelectorAll('.drag-tile').length;
+      const el = document.getElementById(id);
+      if (bucket === 'pitch') el.textContent = `${n} / 5`;
+      else el.textContent = n;
+      grid.classList.toggle('empty', n === 0);
+    });
+  }
+
+  document.addEventListener('dragstart', (e) => {
+    const tile = e.target.closest('.drag-tile');
+    if (!tile || tile.dataset.locked === 'true') { e.preventDefault(); return; }
+    draggedEl = tile;
+    tile.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  document.addEventListener('dragend', (e) => {
+    const tile = e.target.closest('.drag-tile');
+    if (tile) tile.classList.remove('dragging');
+    document.querySelectorAll('.lineup-section').forEach(s => s.classList.remove('drag-over'));
+    draggedEl = null;
+  });
+  document.addEventListener('dragover', (e) => {
+    const grid = e.target.closest('.drag-grid');
+    if (!grid || !draggedEl) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    document.querySelectorAll('.lineup-section').forEach(s => s.classList.remove('drag-over'));
+    grid.closest('.lineup-section').classList.add('drag-over');
+  });
+  document.addEventListener('drop', (e) => {
+    const grid = e.target.closest('.drag-grid');
+    if (!grid || !draggedEl) return;
+    e.preventDefault();
+    // Enforce pitch cap of 5 — but empty slots are allowed
+    if (grid.dataset.bucket === 'pitch') {
+      const count = grid.querySelectorAll('.drag-tile').length;
+      const alreadyHere = grid.contains(draggedEl);
+      if (!alreadyHere && count >= 5) {
+        // bounce
+        document.querySelectorAll('.lineup-section').forEach(s => s.classList.remove('drag-over'));
+        return;
+      }
+    }
+    grid.appendChild(draggedEl);
+    updateCounts();
+  });
+
+  // Touch fallback for mobile (HTML5 drag is flaky on iOS) — simple tap-to-cycle
+  document.addEventListener('click', (e) => {
+    const tile = e.target.closest('.drag-tile');
+    if (!tile || tile.dataset.locked === 'true') return;
+    // Only enable on touch devices
+    if (!('ontouchstart' in window)) return;
+    const buckets = ['pitch', 'tentative', 'substitutes', 'out'];
+    const current = tile.closest('.drag-grid').dataset.bucket;
+    let next = buckets[(buckets.indexOf(current) + 1) % buckets.length];
+    // Skip pitch if full
+    if (next === 'pitch') {
+      const pitchGrid = document.querySelector('.drag-grid[data-bucket="pitch"]');
+      if (pitchGrid.querySelectorAll('.drag-tile').length >= 5) {
+        next = buckets[(buckets.indexOf(next) + 1) % buckets.length];
+      }
+    }
+    document.querySelector(`.drag-grid[data-bucket="${next}"]`).appendChild(tile);
+    updateCounts();
+  });
+
+  // Initial count refresh once DOM ready
+  updateCounts();
+
+  // ============ RULEBOOK TAB SWITCH ============
+  document.querySelectorAll('.tab-switch button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-switch button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const target = btn.dataset.rbtab;
+      document.getElementById('rbtab-upload').style.display = target === 'upload' ? '' : 'none';
+      document.getElementById('rbtab-paste').style.display = target === 'paste' ? '' : 'none';
+    });
+  });
+
+  // ============ ADMIN PANE TABS ============
+  document.querySelectorAll('.admin-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pane = btn.dataset.pane;
+      document.querySelectorAll('.admin-tab').forEach(t => t.classList.toggle('active', t === btn));
+      document.querySelectorAll('.admin-pane').forEach(p => p.classList.toggle('active', p.dataset.pane === pane));
+      // scroll content to top when switching panes
+      const scrollEl = document.querySelector('#screen-admin .screen-scroll');
+      if (scrollEl) scrollEl.scrollTop = 0;
+    });
+  });
+
+  // ============ REFEREE CONSOLE ============
+  // Match switcher
+  const refMatchMeta = {
+    football:  { title: 'TRIDENTS <span class="vs-text">VS</span> PHANTOMS', sport: 'FOOTBALL · GROUND A · ASSIGNED BY ADMIN', t1: 'TRIDENTS', t2: 'PHANTOMS' },
+    cricket:   { title: 'BLAZERS <span class="vs-text">VS</span> VOLTRON',   sport: 'CRICKET · OVAL · ASSIGNED BY ADMIN',     t1: 'BLAZERS',  t2: 'VOLTRON' },
+    badminton: { title: 'TRIDENTS <span class="vs-text">VS</span> BLAZERS',  sport: 'BADMINTON · COURT 2 · ASSIGNED BY ADMIN', t1: 'TRIDENTS', t2: 'BLAZERS' },
+    chess:     { title: 'ALL TEAMS', sport: 'CHESS · LOUNGE · ASSIGNED BY ADMIN', t1: 'WHITE', t2: 'BLACK' }
+  };
+  document.querySelectorAll('.ref-match-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const match = pill.dataset.refmatch;
+      document.querySelectorAll('.ref-match-pill').forEach(p => p.classList.toggle('active', p === pill));
+      document.querySelectorAll('.ref-pane').forEach(p => {
+        p.style.display = p.dataset.refpane === match ? '' : 'none';
+      });
+      const meta = refMatchMeta[match];
+      if (meta) {
+        document.getElementById('refMatchTitle').innerHTML = meta.title;
+        document.getElementById('refSportLine').textContent = meta.sport;
+        document.querySelectorAll('.ref-side-name')[0].textContent = meta.t1;
+        document.querySelectorAll('.ref-side-name')[1].textContent = meta.t2;
+      }
+    });
+  });
+
+  // Score +/- buttons
+  document.querySelectorAll('.ref-pm[data-adj]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const side = btn.dataset.adj;
+      const delta = parseInt(btn.dataset.delta, 10);
+      const el = document.querySelector(`.ref-side-score[data-score="${side}"]`);
+      const next = Math.max(0, parseInt(el.textContent, 10) + delta);
+      el.textContent = next;
+      flashRef(el);
+      if (delta > 0) prependLog(getCurrentClock(), `<span class="${side === 't1' ? 'hl-t1' : 'hl-t2'}">${side === 't1' ? 'TEAM 1' : 'TEAM 2'}</span> +1 · score now ${next}`);
+    });
+  });
+
+  // Generic counter +/- (extra time, over, balls, wickets, game, board, move)
+  document.querySelectorAll('.ref-pm[data-counter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const delta = parseInt(btn.dataset.delta, 10);
+      // The counter value sits as a sibling element within the same .counter-controls
+      const valEl = btn.parentElement.querySelector('.counter-value');
+      if (!valEl) return;
+      // Handle "+2" format for extra time
+      const raw = valEl.textContent.trim();
+      const num = parseInt(raw.replace(/[^\-0-9]/g, ''), 10) || 0;
+      const next = Math.max(0, num + delta);
+      const hasPlus = raw.startsWith('+');
+      valEl.textContent = hasPlus && next > 0 ? `+${next}` : String(next);
+      flashRef(valEl);
+    });
+  });
+
+  // Half cycler
+  let halfState = 0;
+  const halfLabels = ['1H', 'HT', '2H', 'ET', 'FT'];
+  function cycleHalf() {
+    halfState = (halfState + 1) % halfLabels.length;
+    document.getElementById('halfValue').textContent = halfLabels[halfState];
+    document.getElementById('refClockLabel').textContent = ({
+      '1H': '1ST HALF', 'HT': 'HALF TIME', '2H': '2ND HALF', 'ET': 'EXTRA TIME', 'FT': 'FULL TIME'
+    })[halfLabels[halfState]];
+    prependLog(getCurrentClock(), `Switched to ${halfLabels[halfState]}`);
+  }
+  let inningsState = 0;
+  function cycleInnings() {
+    inningsState = (inningsState + 1) % 2;
+    const labels = ['1ST', '2ND'];
+    const el = document.querySelector('.ref-pane[data-refpane="cricket"] .counter-value');
+    // find the innings counter (third counter in cricket pane)
+    document.querySelectorAll('.ref-pane[data-refpane="cricket"] .counter-card').forEach(c => {
+      if (c.querySelector('.counter-label').textContent.trim() === 'Innings') {
+        c.querySelector('.counter-value').textContent = labels[inningsState];
+      }
+    });
+  }
+  let serviceState = 0;
+  function cycleService() {
+    serviceState = (serviceState + 1) % 2;
+    const labels = ['TRI', 'BLZ'];
+    document.querySelectorAll('.ref-pane[data-refpane="badminton"] .counter-card').forEach(c => {
+      if (c.querySelector('.counter-label').textContent.trim() === 'Service') {
+        c.querySelector('.counter-value').textContent = labels[serviceState];
+      }
+    });
+  }
+
+  // Match clock (mm:ss)
+  let clockSeconds = 23 * 60 + 4;
+  let clockRunning = true;
+  function formatClock(s) {
+    const m = Math.floor(s / 60), sec = s % 60;
+    return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+  }
+  function getCurrentClock() {
+    return Math.floor(clockSeconds / 60) + "'";
+  }
+  setInterval(() => {
+    if (!clockRunning) return;
+    clockSeconds++;
+    document.getElementById('refClock').textContent = formatClock(clockSeconds);
+  }, 1000);
+  document.getElementById('refClockToggle').addEventListener('click', () => {
+    clockRunning = !clockRunning;
+    const btn = document.getElementById('refClockToggle');
+    btn.classList.toggle('playing', clockRunning);
+    btn.innerHTML = clockRunning
+      ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>'
+      : '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,3 21,12 6,21"/></svg>';
+  });
+  document.getElementById('refClockReset').addEventListener('click', () => {
+    clockSeconds = 0;
+    document.getElementById('refClock').textContent = '00:00';
+  });
+
+  // Event logging
+  function logRefEvent(type) {
+    const time = getCurrentClock();
+    const descMap = {
+      'goal-t1':  '<span class="hl-t1">TRIDENTS</span> goal',
+      'goal-t2':  '<span class="hl-t2">PHANTOMS</span> goal',
+      'yellow':   'Yellow card shown',
+      'red':      'Red card · player sent off',
+      'foul':     'Foul · free kick awarded',
+      'sub':      'Substitution made',
+      'run-0':    'Dot ball',
+      'run-1':    '1 run',
+      'run-2':    '2 runs',
+      'run-4':    '<span class="hl-t1">FOUR</span>',
+      'run-6':    '<span class="hl-t1">SIX</span>',
+      'wicket':   '<span class="hl-t2">WICKET</span>',
+      'wide':     'Wide · extra run',
+      'nb':       'No-ball · extra run',
+      'bye':      'Bye / leg-bye',
+      'let':      'Let · rally replayed',
+      'fault':    'Service fault',
+      'chess-w-win': 'White wins · 1 - 0',
+      'chess-draw':  'Draw · ½ - ½',
+      'chess-b-win': 'Black wins · 0 - 1'
+    };
+    prependLog(time, descMap[type] || type);
+    // Auto-bump score for goals
+    if (type === 'goal-t1' || type === 'goal-t2') {
+      const side = type.split('-')[1];
+      const el = document.querySelector(`.ref-side-score[data-score="${side}"]`);
+      el.textContent = (parseInt(el.textContent, 10) || 0) + 1;
+      flashRef(el);
+    }
+  }
+  window.logRefEvent = logRefEvent;
+  window.cycleHalf = cycleHalf;
+  window.cycleInnings = cycleInnings;
+  window.cycleService = cycleService;
+
+  function prependLog(time, descHtml) {
+    const log = document.getElementById('refLog');
+    if (!log) return;
+    const row = document.createElement('div');
+    row.className = 'ref-log-item';
+    row.innerHTML = `
+      <div class="ref-log-time">${time}</div>
+      <div class="ref-log-desc">${descHtml}</div>
+      <button class="ref-log-undo">UNDO</button>
+    `;
+    log.insertBefore(row, log.firstChild);
+    row.querySelector('.ref-log-undo').addEventListener('click', () => row.remove());
+    // Tiny flash
+    row.animate([{ background: 'rgba(255,74,28,0.25)' }, { background: 'transparent' }], { duration: 600 });
+  }
+  // Wire up existing undo buttons
+  document.querySelectorAll('.ref-log-undo').forEach(b => {
+    b.addEventListener('click', e => e.target.closest('.ref-log-item').remove());
+  });
+  document.getElementById('logClear').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('refLog').innerHTML = '';
+  });
+  function flashRef(el) {
+    el.animate([{ transform: 'scale(1.15)' }, { transform: 'scale(1)' }], { duration: 220, easing: 'ease-out' });
+  }
+</script>
+
+</body>
+</html>

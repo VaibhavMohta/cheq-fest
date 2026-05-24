@@ -1,0 +1,72 @@
+import type { SVGProps } from 'react';
+
+const base = {
+  width: 20,
+  height: 20,
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+};
+
+export function HomeIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />
+    </svg>
+  );
+}
+
+export function ArenaIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <rect x="3" y="6" width="18" height="12" rx="1.5" />
+      <path d="M12 6v12M3 12h4M17 12h4" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  );
+}
+
+export function LeaderboardIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M4 20h4v-7H4zM10 20h4V4h-4zM16 20h4v-11h-4z" />
+    </svg>
+  );
+}
+
+export function RulebookIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M4 5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2z" />
+      <path d="M4 17h14M9 7h5" />
+    </svg>
+  );
+}
+
+export function ProfileIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </svg>
+  );
+}
+
+export function BackIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M15 18 9 12l6-6" />
+    </svg>
+  );
+}
+
+export function MenuIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  );
+}

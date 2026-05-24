@@ -1,0 +1,44 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+
+# TanStack Router generated
+src/routeTree.gen.ts
+
+# Firebase
+.firebase
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Service-account keys must never be committed.
+service-account.json
+*-service-account.json
+
+# Per-user Claude Code state (commit shared config only).
+.claude/settings.local.json
+.claude/plans
+.claude/*.output
+
+# Build-time TS caches
+*.tsbuildinfo
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Original archive — extracted contents are tracked instead.
+sports fest v1.zip
+dev.log

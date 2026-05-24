@@ -1,0 +1,56 @@
+/* CHEQ Fest design tokens — single source of truth.
+   Do not hardcode hex values in components; reference these CSS variables
+   (directly or via Tailwind utilities exposed in the @theme block below). */
+
+:root {
+  /* Surfaces */
+  --bg: #0a0a0a;
+  --bg-card: #141414;
+  --bg-elev: #1c1c1c;
+
+  /* Ink */
+  --ink: #f5f1e8;
+  --ink-dim: #8a8780;
+  --ink-mute: #4a4742;
+
+  /* Accents */
+  --accent: #ff4a1c;
+  --accent-2: #e8ff4a;
+  --accent-3: #4ad4ff;
+  --accent-4: #ff4ad0;
+
+  /* Structure */
+  --line: #2a2724;
+  --gold: #f5c542;
+
+  /* Team colors (must stay aligned with --accent / --accent-2/3/4) */
+  --team-tridents: var(--accent);
+  --team-phantoms: var(--accent-3);
+  --team-blazers: var(--accent-2);
+  --team-voltron: var(--accent-4);
+}
+
+/* Expose tokens to Tailwind v4 utilities.
+   Examples: bg-bg, bg-bg-card, text-ink, text-ink-dim, border-line,
+   text-accent, bg-accent-2, text-gold. */
+@theme {
+  --color-bg: var(--bg);
+  --color-bg-card: var(--bg-card);
+  --color-bg-elev: var(--bg-elev);
+
+  --color-ink: var(--ink);
+  --color-ink-dim: var(--ink-dim);
+  --color-ink-mute: var(--ink-mute);
+
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-3: var(--accent-3);
+  --color-accent-4: var(--accent-4);
+
+  --color-line: var(--line);
+  --color-gold: var(--gold);
+
+  --font-display: 'Anton', system-ui, sans-serif;
+  --font-sans: 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
