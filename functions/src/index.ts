@@ -7,3 +7,5 @@ export { recomputeMatchState } from './recomputeMatchState';
 export { awardPoints } from './awardPoints';
 export { parseRulebook } from './parseRulebook';
 export { suggestTeamColor } from './suggestTeamColor';
+export { grantAdmin } from './grantAdmin';
+export { revokeAdmin } from './revokeAdmin';

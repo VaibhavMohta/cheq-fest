@@ -196,14 +196,107 @@ function TeamBlock({ eventId, teamId }: { eventId: string; teamId: string }) {
         <p className="rounded-xl border border-line bg-bg-card px-3 py-2.5 font-mono text-[11px] tracking-[0.06em] text-ink">
           Group · <span className="text-ink-dim">{team.groupCaptainEmail ?? '—'}</span>
         </p>
-        <p className="rounded-xl border border-line bg-bg-card px-3 py-2.5 font-mono text-[11px] tracking-[0.06em] text-ink">
-          Vice · <span className="text-ink-dim">{team.viceCaptainEmail ?? 'Not assigned'}</span>
-        </p>
+        <ViceCaptainPicker
+          eventId={eventId}
+          teamId={teamId}
+          roster={roster}
+          currentEmail={team.viceCaptainEmail}
+          groupCaptainEmail={team.groupCaptainEmail}
+        />
       </div>
 
       {/* Sport Captains */}
       <SportCaptainsSection eventId={eventId} teamId={teamId} roster={roster} />
     </section>
+  );
+}
+
+function ViceCaptainPicker({
+  eventId,
+  teamId,
+  roster,
+  currentEmail,
+  groupCaptainEmail,
+}: {
+  eventId: string;
+  teamId: string;
+  roster: PersonRow[];
+  currentEmail: string | null;
+  groupCaptainEmail: string | null;
+}) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  // Don't let the GC pick themselves as Vice — those are distinct roles.
+  const gcLower = groupCaptainEmail?.toLowerCase() ?? null;
+  const candidates = useMemo(
+    () => roster.filter((p) => p.email.toLowerCase() !== gcLower),
+    [roster, gcLower],
+  );
+
+  const selected = useMemo<PersonRow[]>(() => {
+    if (!currentEmail) return [];
+    const lower = currentEmail.toLowerCase();
+    const match = candidates.find((p) => p.email.toLowerCase() === lower);
+    return match ? [match] : [];
+  }, [currentEmail, candidates]);
+
+  const save = useMutation({
+    mutationFn: async (email: string | null) => {
+      await setDoc(
+        teamRef(eventId, teamId),
+        { viceCaptainEmail: email?.toLowerCase() ?? null },
+        { merge: true },
+      );
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'team', eventId, teamId] });
+      void qc.invalidateQueries({ queryKey: ['admin', 'teams', eventId] });
+    },
+  });
+
+  return (
+    <div className="rounded-xl border border-line bg-bg-card">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left font-mono text-[11px] tracking-[0.06em] text-ink"
+      >
+        <span>
+          Vice · <span className="text-ink-dim">{currentEmail ?? 'Not assigned'}</span>
+        </span>
+        <span
+          className={
+            currentEmail
+              ? 'rounded-md border border-accent-2/40 bg-accent-2/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.08em] text-accent-2'
+              : 'rounded-md border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.08em] text-accent'
+          }
+        >
+          {save.isPending ? 'Saving…' : currentEmail ? 'Change' : 'Assign'}
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-line p-3">
+          {candidates.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-line px-3 py-3 text-center font-mono text-[10px] uppercase tracking-[0.06em] text-ink-mute">
+              No eligible teammates yet — add players first.
+            </p>
+          ) : (
+            <PlayerPicker
+              mode="single"
+              available={candidates}
+              selected={selected}
+              onChange={(next) => {
+                save.mutate(next[0]?.email.toLowerCase() ?? null);
+                setOpen(false);
+              }}
+              searchPlaceholder="Search vice captain…"
+              emptySelectedLabel="No Vice Captain picked"
+            />
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

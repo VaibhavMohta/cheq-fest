@@ -39,7 +39,13 @@ service cloud.firestore {
 
       match /teams/{teamId} {
         allow read: if true;
-        allow write: if isAdmin();
+        // Admin: full write. Group Captain of this team may update the
+        // team doc only if the change is constrained to viceCaptainEmail
+        // — protects color, members, GC self, totalPoints, etc.
+        allow create, delete: if isAdmin();
+        allow update: if isAdmin()
+                      || (isGroupCaptainOfTeam(eventId, teamId)
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viceCaptainEmail']));
 
         // Roster writes come from three places:
         //   - Admin / Super Admin: anything goes.

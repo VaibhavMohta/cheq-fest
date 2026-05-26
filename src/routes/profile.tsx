@@ -136,7 +136,7 @@ function ProfileScreen() {
           )}
           {role.is('super-admin') && (
             <QuickActionTile
-              to="/admin"
+              to="/manage-admins"
               label="Manage Admins"
               sub="Grant / revoke admin"
               accent="gold"
