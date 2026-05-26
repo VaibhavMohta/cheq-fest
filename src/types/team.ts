@@ -31,6 +31,14 @@ export const TEAM_PALETTE: TeamColor[] = [
   { hex: '#0ea5e9', label: 'Sky' },
   { hex: '#a16207', label: 'Maroon' },
   { hex: '#f5f1e8', label: 'White' },
+  // Neutrals — added so common kit colors (grey, black, navy, silver) are
+  // representable as the dominant team color without forcing the AI to
+  // misclassify them as something else.
+  { hex: '#9ca3af', label: 'Silver' },
+  { hex: '#4b5563', label: 'Charcoal' },
+  { hex: '#1f2937', label: 'Slate' },
+  { hex: '#0b0b0b', label: 'Black' },
+  { hex: '#0c1a3a', label: 'Navy' },
 ] as const;
 
 /** All palette hex values, exported for the AI server prompt + validation. */

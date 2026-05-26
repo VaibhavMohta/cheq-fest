@@ -168,7 +168,13 @@ function CreateTeamForm({
   (suggestions ?? []).forEach((s, i) => {
     aiRank.set(s.color.toLowerCase(), i);
   });
-  const swatches = [...TEAM_PALETTE].sort((a, b) => {
+  // Custom AI hexes (model-generated, not in the static palette) get
+  // promoted to swatches so the admin can pick them with a single tap.
+  const paletteHexSet = new Set(TEAM_PALETTE.map((c) => c.hex.toLowerCase()));
+  const customAiSwatches = (suggestions ?? [])
+    .filter((s) => s.source === 'custom' && !paletteHexSet.has(s.color.toLowerCase()))
+    .map((s) => ({ hex: s.color, label: 'AI match' }));
+  const swatches = [...customAiSwatches, ...TEAM_PALETTE].sort((a, b) => {
     const ai = aiRank.get(a.hex.toLowerCase()) ?? 99;
     const bi = aiRank.get(b.hex.toLowerCase()) ?? 99;
     if (ai !== bi) return ai - bi;

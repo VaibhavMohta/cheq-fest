@@ -38,9 +38,12 @@ const PALETTE: { hex: string; label: string }[] = [
   { hex: '#0ea5e9', label: 'Sky (medium azure)' },
   { hex: '#a16207', label: 'Maroon (dark earthy red-brown)' },
   { hex: '#f5f1e8', label: 'White (off-white / cream)' },
+  { hex: '#9ca3af', label: 'Silver (light cool grey)' },
+  { hex: '#4b5563', label: 'Charcoal (medium grey)' },
+  { hex: '#1f2937', label: 'Slate (very dark cool grey)' },
+  { hex: '#0b0b0b', label: 'Black (near-pure black)' },
+  { hex: '#0c1a3a', label: 'Navy (very dark blue)' },
 ];
-
-const PALETTE_HEXES = PALETTE.map((p) => p.hex);
 
 const SUGGESTIONS_SCHEMA = {
   type: 'object',
@@ -52,13 +55,22 @@ const SUGGESTIONS_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['color', 'rationale'],
+        required: ['color', 'rationale', 'source'],
         properties: {
           color: {
             type: 'string',
-            enum: PALETTE_HEXES,
+            // Free-form hex — AI can pick a palette entry OR generate a
+            // custom hex that better matches the jersey's actual color.
+            // Format validated post-parse, not via JSON-schema (Anthropic
+            // structured output doesn't reliably enforce regex on string).
             description:
-              'Hex of the palette entry that best matches the jersey. Must be one of the listed hexes.',
+              '6-digit hex color with leading "#". Must accurately represent the actual fabric color you see on the jersey.',
+          },
+          source: {
+            type: 'string',
+            enum: ['palette', 'custom'],
+            description:
+              '"palette" if you picked an entry from the listed palette; "custom" if you generated a new hex because no palette entry was close enough.',
           },
           rationale: {
             type: 'string',
@@ -71,7 +83,9 @@ const SUGGESTIONS_SCHEMA = {
   },
 } as const;
 
-type Suggestion = { color: string; rationale: string };
+type Suggestion = { color: string; rationale: string; source: 'palette' | 'custom' };
+
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 export const suggestTeamColor = onCall(
   { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60, memory: '512MiB' },
@@ -121,6 +135,7 @@ export const suggestTeamColor = onCall(
       return {
         suggestions: available.slice(0, 2).map((p) => ({
           color: p.hex,
+          source: 'palette' as const,
           rationale: 'Stub suggestion (no API key set).',
         })),
       };
@@ -167,16 +182,21 @@ export const suggestTeamColor = onCall(
       throw new HttpsError('internal', 'Model returned invalid JSON.');
     }
 
-    // Defense in depth — strip any suggestion that uses a now-claimed slot
-    // (the model shouldn't, given the prompt, but better safe than sorry).
-    const availableHexes = new Set(available.map((p) => p.hex.toLowerCase()));
-    parsed.suggestions = parsed.suggestions.filter((s) =>
-      availableHexes.has(s.color.toLowerCase()),
-    );
+    // Defense in depth:
+    //  - drop entries that aren't valid 6-digit hex
+    //  - drop entries that exactly match a CLAIMED palette slot (case-insensitive)
+    // Custom hexes that happen to be close to a claimed slot are allowed —
+    // the model is trusted to differentiate when it intentionally veers.
+    const excludedHexes = new Set(excluded);
+    parsed.suggestions = parsed.suggestions
+      .map((s) => ({ ...s, color: s.color.trim() }))
+      .filter((s) => HEX_RE.test(s.color))
+      .filter((s) => !excludedHexes.has(s.color.toLowerCase()));
     if (parsed.suggestions.length === 0) {
       parsed.suggestions = available.slice(0, 1).map((p) => ({
         color: p.hex,
-        rationale: 'Fallback — model suggestions all matched claimed slots.',
+        source: 'palette' as const,
+        rationale: 'Fallback — no usable suggestion from the model.',
       }));
     }
 
@@ -224,23 +244,41 @@ function buildPrompt(
     : '';
 
   return `You are looking at a sports jersey photo for a company sports fest.
-Your job is to pick the palette colors that most closely match the jersey's
-dominant visible colors — primary first, then secondary if present.
+Your job is to identify the actual dominant fabric colors of the jersey
+and return 1–3 hex values that team uniforms will be themed with.
 
-Look at the actual hues on the fabric (ignore shadows, logos, lighting, and
-white skin/background). Identify the 1-3 dominant colors of the jersey
-itself and match each to the closest available palette entry below.
+PROCESS:
+1. Look only at the jersey fabric itself. IGNORE: skin, hair, background,
+   shadows, lighting tint, logo prints, sleeve trim of a different color.
+2. Identify the SINGLE most dominant color of the jersey body — the one
+   that covers the largest fabric area. This is suggestion #1.
+3. If the jersey clearly has a strong secondary color (e.g. contrasting
+   sleeves, large color block), that's suggestion #2. If not, skip.
+4. Optional third = a tertiary alternative if the jersey could reasonably
+   be themed two different ways.
 
-Available palette (each entry is a hex value and a description):
+CHOOSING A HEX FOR EACH SUGGESTION:
+- Prefer an entry from the AVAILABLE PALETTE below when one is genuinely
+  close to the fabric color (set source: "palette", use the listed hex).
+- If NO palette entry is a good match — for example the jersey is a
+  specific grey, off-blue, beige, navy, etc. that isn't represented —
+  GENERATE a custom 6-digit hex that accurately depicts the fabric color
+  (set source: "custom"). Greys especially: a charcoal-grey jersey should
+  return a grey hex like #6b7280 or #4b5563, NOT be force-matched to
+  Royal Blue or Purple.
+- Never describe the jersey color as something it visually isn't.
+
+AVAILABLE PALETTE (good defaults, but you may go custom):
 ${availLines}
 ${excludedLines}
 
-Return 1–3 suggestions ordered from best match (closest hue to the jersey's
-primary color) to acceptable fallback. For each, the rationale must name
-the actual color you see on the jersey ("the jersey is dominantly cobalt
-blue with white sleeves" → suggest Royal Blue). Do NOT suggest any color
-from the "already taken" list. If the jersey is multi-color, pick the
-dominant block color, not the trim.`;
+CONSTRAINTS:
+- Do NOT return any color that exactly matches a hex from the "ALREADY
+  TAKEN" list above.
+- Each rationale must name the literal fabric color you actually see
+  ("dominantly charcoal grey body with white sleeve cuffs" → return
+   #4b5563 source:"custom"). One sentence each.
+- Return 1–3 suggestions, ordered best→fallback.`;
 }
 
 // Haiku 4.5 rates per million tokens (USD).
