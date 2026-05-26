@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { collectionGroup, doc, onSnapshot, query, where } from 'firebase/firestore';
+import { doc, onSnapshot, query, where } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import { db } from './firebase';
-import { teamsCol } from './db';
+import { rostersCol, teamsCol } from './db';
 import { useActiveEvent } from './activeEvent';
 import { useAuth } from './auth';
 import type { TeamId } from '@/types/team';
@@ -165,46 +165,86 @@ export function useRole(): RoleState {
     );
   }, [userEmail, activeEventId]);
 
-  // Live sport-captain detection — collectionGroup query over every
-  // roster doc where `sportCaptainEmail` matches the signed-in user.
-  // The roster path is `events/{eventId}/teams/{teamId}/rosters/{sportId}`;
-  // we derive both ids from snap.ref so we don't need a separate query
-  // per team. Scoped to the active event client-side.
+  // Live sport-captain detection — done WITHOUT a collectionGroup query,
+  // which needs separate rules + an explicit COLLECTION_GROUP-scoped
+  // index. Since a Sport Captain is by definition a member of the team,
+  // we resolve the user's team(s) first via `teams.members
+  // array-contains me`, then subscribe to each matched team's rosters
+  // subcollection filtered by `sportCaptainEmail == me`. Both queries
+  // are scoped, so the default per-collection indexes Firestore creates
+  // are sufficient.
+  const [myTeamIds, setMyTeamIds] = useState<TeamId[]>([]);
+  useEffect(() => {
+    if (!userEmail || !activeEventId) {
+      setMyTeamIds([]);
+      return;
+    }
+    const q = query(
+      teamsCol(activeEventId),
+      where('members', 'array-contains', userEmail),
+    );
+    return onSnapshot(
+      q,
+      (snap) => setMyTeamIds(snap.docs.map((d) => d.id)),
+      (err) => {
+        // eslint-disable-next-line no-console
+        console.warn('useRole: team-membership subscription failed', err);
+        setMyTeamIds([]);
+      },
+    );
+  }, [userEmail, activeEventId]);
+
+  // Each of my teams gets its own roster subscription; results merged
+  // into one captaincy map keyed by teamId. We dedupe with the GC's team
+  // list as a safety net (a captain is always on their team, even if
+  // members[] is somehow stale).
   useEffect(() => {
     if (!userEmail || !activeEventId) {
       setLiveSportCaptainOf([]);
       return;
     }
-    const q = query(
-      collectionGroup(db, 'rosters'),
-      where('sportCaptainEmail', '==', userEmail),
+    const candidateTeamIds = Array.from(
+      new Set<TeamId>([...myTeamIds, ...liveGroupCaptainOf]),
     );
-    return onSnapshot(
-      q,
-      (snap) => {
-        const out: { sportId: string; teamId: TeamId }[] = [];
-        for (const d of snap.docs) {
-          // path: events/{eventId}/teams/{teamId}/rosters/{sportId}
-          const parts = d.ref.path.split('/');
-          const ev = parts[1];
-          const teamId = parts[3];
-          const sportId = parts[5];
-          if (ev === activeEventId && teamId && sportId) {
-            out.push({ sportId, teamId });
-          }
-        }
-        setLiveSportCaptainOf(out);
-      },
-      (err) => {
-        // Surface in DevTools — a silent fallback used to mask the
-        // collectionGroup rules / index gap that prevented sport-cap
-        // detection from working at all.
-        // eslint-disable-next-line no-console
-        console.warn('useRole: sport-captain subscription failed', err);
-        setLiveSportCaptainOf([]);
-      },
-    );
-  }, [userEmail, activeEventId]);
+    if (candidateTeamIds.length === 0) {
+      setLiveSportCaptainOf([]);
+      return;
+    }
+    const perTeam = new Map<string, { sportId: string; teamId: TeamId }[]>();
+    const flush = () => {
+      const flat: { sportId: string; teamId: TeamId }[] = [];
+      for (const arr of perTeam.values()) flat.push(...arr);
+      setLiveSportCaptainOf(flat);
+    };
+    const unsubs = candidateTeamIds.map((teamId) => {
+      const q = query(
+        rostersCol(activeEventId, teamId),
+        where('sportCaptainEmail', '==', userEmail),
+      );
+      return onSnapshot(
+        q,
+        (snap) => {
+          perTeam.set(
+            teamId,
+            snap.docs.map((d) => ({ sportId: d.id, teamId })),
+          );
+          flush();
+        },
+        (err) => {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `useRole: roster sport-captain sub failed for team ${teamId}`,
+            err,
+          );
+          perTeam.set(teamId, []);
+          flush();
+        },
+      );
+    });
+    return () => {
+      for (const u of unsubs) u();
+    };
+  }, [userEmail, activeEventId, myTeamIds, liveGroupCaptainOf]);
 
   // Pull custom claims for admin/super-admin status.
   useEffect(() => {
