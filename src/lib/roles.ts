@@ -157,8 +157,9 @@ export function useRole(): RoleState {
       (snap) => {
         setLiveGroupCaptainOf(snap.docs.map((d) => d.id as TeamId));
       },
-      () => {
-        // Permission denied for guest reads etc — fall back to empty.
+      (err) => {
+        // eslint-disable-next-line no-console
+        console.warn('useRole: group-captain subscription failed', err);
         setLiveGroupCaptainOf([]);
       },
     );
@@ -194,7 +195,14 @@ export function useRole(): RoleState {
         }
         setLiveSportCaptainOf(out);
       },
-      () => setLiveSportCaptainOf([]),
+      (err) => {
+        // Surface in DevTools — a silent fallback used to mask the
+        // collectionGroup rules / index gap that prevented sport-cap
+        // detection from working at all.
+        // eslint-disable-next-line no-console
+        console.warn('useRole: sport-captain subscription failed', err);
+        setLiveSportCaptainOf([]);
+      },
     );
   }, [userEmail, activeEventId]);
 

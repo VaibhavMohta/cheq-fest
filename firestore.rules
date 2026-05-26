@@ -27,6 +27,18 @@ service cloud.firestore {
           .data.groupCaptainEmail == request.auth.token.email;
     }
 
+    // Cross-event roster reads needed for the `useRole()` collectionGroup
+    // query that detects sport captaincy. The per-event match below
+    // already authorises direct reads/writes; this wildcard-path rule
+    // exists *only* to authorise collectionGroup('rosters') reads.
+    //
+    // We allow any signed-in user to read these because the data is the
+    // same public data the per-event rule already opens up. Writes stay
+    // gated by the per-event rule.
+    match /{path=**}/rosters/{sportId} {
+      allow read: if true;
+    }
+
     // Public reads, admin-only writes on the event tree.
     match /events/{eventId} {
       allow read: if true;
