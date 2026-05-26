@@ -148,23 +148,48 @@ export function EventTab() {
             <FormField label="Start Date">
               <DatePicker
                 value={draft.startDate ? draft.startDate.toDate() : null}
-                onChange={(d) =>
-                  setDraft({ ...draft, startDate: d ? Timestamp.fromDate(d) : null })
-                }
+                onChange={(d) => {
+                  const startTs = d ? Timestamp.fromDate(d) : null;
+                  // If the previously-saved end date is now before the new
+                  // start, drop it so the admin re-picks instead of leaving
+                  // an inverted range.
+                  const next: EventDoc = { ...draft, startDate: startTs };
+                  if (
+                    startTs &&
+                    draft.endDate &&
+                    draft.endDate.toMillis() < startTs.toMillis()
+                  ) {
+                    next.endDate = null;
+                  }
+                  setDraft(next);
+                }}
                 placeholder="Pick start"
               />
             </FormField>
-            <FormField label="End Date">
+            <FormField
+              label="End Date"
+              hint={
+                draft.startDate ? undefined : 'Pick the start date first.'
+              }
+            >
               <DatePicker
                 value={draft.endDate ? draft.endDate.toDate() : null}
                 onChange={(d) =>
                   setDraft({ ...draft, endDate: d ? Timestamp.fromDate(d) : null })
                 }
                 placeholder="Pick end"
-                fromYear={draft.startDate?.toDate().getFullYear() ?? undefined}
+                disabled={!draft.startDate}
+                minDate={draft.startDate ? draft.startDate.toDate() : null}
               />
             </FormField>
           </div>
+
+          {(!draft.startDate || !draft.endDate) && (
+            <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-mute">
+              Start and end dates are required — matches can only be
+              scheduled inside this range.
+            </p>
+          )}
 
           <FormField label="Venue">
             <TextInput
@@ -189,10 +214,21 @@ export function EventTab() {
 
           <Button
             type="button"
-            disabled={save.isPending}
+            disabled={
+              save.isPending ||
+              !draft.startDate ||
+              !draft.endDate ||
+              draft.endDate.toMillis() < draft.startDate.toMillis()
+            }
             onClick={() => save.mutate({ id: activeEventId, data: draft })}
           >
-            {save.isPending ? 'Saving…' : save.isSuccess ? 'Saved ✓' : 'Save Event'}
+            {save.isPending
+              ? 'Saving…'
+              : !draft.startDate || !draft.endDate
+                ? 'Set start & end dates'
+                : save.isSuccess
+                  ? 'Saved ✓'
+                  : 'Save Event'}
           </Button>
         </section>
       )}

@@ -39,10 +39,46 @@ const teamsQk = (eventId: string) => ['admin', 'teams', eventId] as const;
 const USERS_QK = ['admin', 'claimedPlayers'] as const;
 
 export function MatchesTab() {
-  return <RequireEvent>{(_event, eventId) => <MatchesTabInner eventId={eventId} />}</RequireEvent>;
+  return (
+    <RequireEvent>
+      {(event, eventId) => {
+        const eventStart = event.startDate?.toDate() ?? null;
+        const eventEnd = event.endDate?.toDate() ?? null;
+        if (!eventStart || !eventEnd) {
+          return (
+            <div className="mx-5 rounded-2xl border border-dashed border-accent/40 bg-accent/5 px-4 py-6 text-center">
+              <p className="font-display text-base uppercase tracking-[0.08em] text-accent">
+                Set event dates first
+              </p>
+              <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.06em] text-ink-dim">
+                Matches must be scheduled inside the event's date range.
+                Open the <span className="text-ink">Event</span> tab and
+                pick a start + end date before creating matches.
+              </p>
+            </div>
+          );
+        }
+        return (
+          <MatchesTabInner
+            eventId={eventId}
+            eventStart={eventStart}
+            eventEnd={eventEnd}
+          />
+        );
+      }}
+    </RequireEvent>
+  );
 }
 
-function MatchesTabInner({ eventId }: { eventId: string }) {
+function MatchesTabInner({
+  eventId,
+  eventStart,
+  eventEnd,
+}: {
+  eventId: string;
+  eventStart: Date;
+  eventEnd: Date;
+}) {
   const qc = useQueryClient();
 
   const sports = useQuery({
@@ -134,6 +170,8 @@ function MatchesTabInner({ eventId }: { eventId: string }) {
       <CreateMatchForm
         sports={availableSports}
         teams={availableTeams}
+        eventStart={eventStart}
+        eventEnd={eventEnd}
         pending={create.isPending}
         onCreate={(args) => create.mutate(args)}
       />
@@ -166,11 +204,15 @@ function MatchesTabInner({ eventId }: { eventId: string }) {
 function CreateMatchForm({
   sports,
   teams,
+  eventStart,
+  eventEnd,
   pending,
   onCreate,
 }: {
   sports: { id: string; name: string }[];
   teams: TeamOption[];
+  eventStart: Date;
+  eventEnd: Date;
   pending: boolean;
   onCreate: (args: {
     sportId: string;
@@ -218,11 +260,16 @@ function CreateMatchForm({
             ))}
           </select>
         </FormField>
-        <FormField label="Scheduled">
+        <FormField
+          label="Scheduled"
+          hint={`Within event window: ${formatRange(eventStart, eventEnd)}`}
+        >
           <DateTimePicker
             value={scheduled}
             onChange={(d) => setScheduled(d)}
             placeholder="dd-mm-yyyy --:--"
+            minDate={eventStart}
+            maxDate={eventEnd}
           />
         </FormField>
         <FormField label="Team A">
@@ -267,6 +314,22 @@ function CreateMatchForm({
           if (!canCreate) {
             setError('Pick a sport and two different teams.');
             return;
+          }
+          if (scheduled) {
+            const t = scheduled.getTime();
+            const lo = new Date(eventStart);
+            lo.setHours(0, 0, 0, 0);
+            const hi = new Date(eventEnd);
+            hi.setHours(23, 59, 59, 999);
+            if (t < lo.getTime() || t > hi.getTime()) {
+              setError(
+                `Match must be scheduled inside the event window (${formatRange(
+                  eventStart,
+                  eventEnd,
+                )}).`,
+              );
+              return;
+            }
           }
           setError(null);
           const startTs = scheduled ? Timestamp.fromDate(scheduled) : null;
@@ -470,6 +533,15 @@ function statusToChip(s: MatchStatus): ChipVariant {
   if (s === 'live') return 'live';
   if (s === 'final') return 'done';
   return 'upcoming';
+}
+
+function formatRange(start: Date, end: Date): string {
+  const opts: Intl.DateTimeFormatOptions = {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  };
+  return `${start.toLocaleDateString(undefined, opts)} → ${end.toLocaleDateString(undefined, opts)}`;
 }
 
 function formatDateTime(ts: Timestamp): string {

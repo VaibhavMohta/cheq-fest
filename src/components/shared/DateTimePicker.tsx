@@ -10,6 +10,12 @@ type Props = {
   placeholder?: string;
   fromYear?: number;
   toYear?: number;
+  /** Earliest selectable instant (inclusive). Days before this are
+   *  disabled in the calendar; days outside the calendar bound also
+   *  shrink the year/month dropdowns automatically. */
+  minDate?: Date | null;
+  /** Latest selectable instant (inclusive). */
+  maxDate?: Date | null;
   /** Minute step on the wheel (e.g. 5 → 0,5,10,...). Defaults to 5. */
   minuteStep?: number;
   disabled?: boolean;
@@ -30,6 +36,8 @@ export function DateTimePicker({
   placeholder = 'Pick a date & time',
   fromYear,
   toYear,
+  minDate,
+  maxDate,
   minuteStep = 5,
   disabled,
 }: Props) {
@@ -131,8 +139,15 @@ export function DateTimePicker({
             selected={draftDate ?? undefined}
             onSelect={updateDate}
             captionLayout="dropdown"
-            startMonth={new Date(fromYear ?? now.getFullYear() - 2, 0)}
-            endMonth={new Date(toYear ?? now.getFullYear() + 5, 11)}
+            startMonth={new Date(
+              fromYear ?? minDate?.getFullYear() ?? now.getFullYear() - 2,
+              0,
+            )}
+            endMonth={new Date(
+              toYear ?? maxDate?.getFullYear() ?? now.getFullYear() + 5,
+              11,
+            )}
+            disabled={buildDisabledMatcher(minDate, maxDate)}
             classNames={DAY_PICKER_CLASSES}
             today={now}
           />
@@ -209,6 +224,26 @@ export function DateTimePicker({
 }
 
 const HOURS_12 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+/** Build a DayPicker `disabled` matcher array from optional min/max
+ *  bounds. Returns undefined when neither is set. */
+function buildDisabledMatcher(
+  minDate: Date | null | undefined,
+  maxDate: Date | null | undefined,
+) {
+  const matchers: Array<{ before: Date } | { after: Date }> = [];
+  if (minDate) {
+    const x = new Date(minDate);
+    x.setHours(0, 0, 0, 0);
+    matchers.push({ before: x });
+  }
+  if (maxDate) {
+    const x = new Date(maxDate);
+    x.setHours(23, 59, 59, 999);
+    matchers.push({ after: x });
+  }
+  return matchers.length > 0 ? matchers : undefined;
+}
 
 function buildMinutes(step: number): number[] {
   const out: number[] = [];

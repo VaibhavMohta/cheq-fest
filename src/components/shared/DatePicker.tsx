@@ -12,6 +12,10 @@ type Props = {
   fromYear?: number;
   /** Latest year selectable. Defaults to current year + 5. */
   toYear?: number;
+  /** Disable picking any day before this date (inclusive bound). */
+  minDate?: Date | null;
+  /** Disable picking any day after this date (inclusive bound). */
+  maxDate?: Date | null;
   /** Disable the input. */
   disabled?: boolean;
 };
@@ -28,6 +32,8 @@ export function DatePicker({
   placeholder = 'Pick a date',
   fromYear,
   toYear,
+  minDate,
+  maxDate,
   disabled,
 }: Props) {
   const now = new Date();
@@ -74,8 +80,15 @@ export function DatePicker({
               setOpen(false);
             }}
             captionLayout="dropdown"
-            startMonth={new Date(fromYear ?? now.getFullYear() - 2, 0)}
-            endMonth={new Date(toYear ?? now.getFullYear() + 5, 11)}
+            startMonth={new Date(
+              fromYear ?? minDate?.getFullYear() ?? now.getFullYear() - 2,
+              0,
+            )}
+            endMonth={new Date(
+              toYear ?? maxDate?.getFullYear() ?? now.getFullYear() + 5,
+              11,
+            )}
+            disabled={buildDisabledMatcher(minDate, maxDate)}
             classNames={DAY_PICKER_CLASSES}
             today={now}
           />
@@ -83,6 +96,32 @@ export function DatePicker({
       )}
     </div>
   );
+}
+
+/** Build a DayPicker `disabled` matcher array from optional min/max
+ *  bounds. We use separate { before } and { after } matchers (instead of
+ *  a DateInterval) so each side is independent. Returns undefined when
+ *  neither is set. */
+function buildDisabledMatcher(
+  minDate: Date | null | undefined,
+  maxDate: Date | null | undefined,
+) {
+  const matchers: Array<{ before: Date } | { after: Date }> = [];
+  if (minDate) matchers.push({ before: startOfDay(minDate) });
+  if (maxDate) matchers.push({ after: endOfDay(maxDate) });
+  return matchers.length > 0 ? matchers : undefined;
+}
+
+function startOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function endOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(23, 59, 59, 999);
+  return x;
 }
 
 function formatHuman(d: Date): string {
