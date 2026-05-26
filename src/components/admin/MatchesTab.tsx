@@ -29,6 +29,7 @@ function teamNameFor(teamId: TeamId, teams: TeamOption[]): string {
 }
 import { Button } from '@/components/shared/Button';
 import { Chip, type ChipVariant } from '@/components/shared/Chip';
+import { DateTimePicker } from '@/components/shared/DateTimePicker';
 import { FormField, TextInput } from './FormField';
 import { RequireEvent } from './RequireEvent';
 
@@ -182,7 +183,7 @@ function CreateMatchForm({
   const [sportId, setSportId] = useState<string>('');
   const [teamAId, setTeamAId] = useState<TeamId | ''>('');
   const [teamBId, setTeamBId] = useState<TeamId | ''>('');
-  const [scheduled, setScheduled] = useState<string>('');
+  const [scheduled, setScheduled] = useState<Date | null>(null);
   const [venue, setVenue] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
@@ -218,10 +219,10 @@ function CreateMatchForm({
           </select>
         </FormField>
         <FormField label="Scheduled">
-          <TextInput
-            type="datetime-local"
+          <DateTimePicker
             value={scheduled}
-            onChange={(e) => setScheduled(e.target.value)}
+            onChange={(d) => setScheduled(d)}
+            placeholder="dd-mm-yyyy --:--"
           />
         </FormField>
         <FormField label="Team A">
@@ -268,7 +269,7 @@ function CreateMatchForm({
             return;
           }
           setError(null);
-          const startTs = scheduled ? Timestamp.fromDate(new Date(scheduled)) : null;
+          const startTs = scheduled ? Timestamp.fromDate(scheduled) : null;
           onCreate({
             sportId,
             teamAId: teamAId as TeamId,
@@ -277,7 +278,7 @@ function CreateMatchForm({
             venue,
           });
           // Reset only the variable bits.
-          setScheduled('');
+          setScheduled(null);
           setVenue('');
         }}
       >
