@@ -13,7 +13,20 @@ import {
 } from 'firebase/firestore';
 import { matchesCol, matchRef, sportsCol, teamsCol, usersCol } from '@/lib/db';
 import { emptyMatchState, type MatchDoc, type MatchStatus } from '@/types/match';
-import { TEAM_LABEL, type TeamId } from '@/types/team';
+import { teamLabelFor, type TeamId } from '@/types/team';
+
+type TeamOption = { id: TeamId; name: string };
+
+/** Resolve a team id to a display name from the loaded team list, falling
+ *  back to the legacy `teamLabelFor()` helper for the hardcoded demo ids
+ *  and finally to the raw id. NEVER returns an empty string. */
+function teamNameFor(teamId: TeamId, teams: TeamOption[]): string {
+  const team = teams.find((t) => t.id === teamId);
+  if (team && team.name.trim()) return team.name;
+  const legacy = teamLabelFor(teamId);
+  if (legacy && legacy.trim()) return legacy;
+  return teamId;
+}
 import { Button } from '@/components/shared/Button';
 import { Chip, type ChipVariant } from '@/components/shared/Chip';
 import { FormField, TextInput } from './FormField';
@@ -105,14 +118,21 @@ function MatchesTabInner({ eventId }: { eventId: string }) {
     return <p className="px-5 text-ink-dim">Loading…</p>;
   }
 
-  const availableTeams = (teams.data ?? []).map((t) => t.id);
-  const availableSports = sports.data ?? [];
+  // Only keep teams that have a non-empty name. A team doc with a blank
+  // name has nothing meaningful to render in a picker — silently exclude
+  // it so the dropdown never shows a blank option.
+  const availableTeams: TeamOption[] = (teams.data ?? [])
+    .filter((t) => typeof t.name === 'string' && t.name.trim().length > 0)
+    .map((t) => ({ id: t.id, name: t.name }));
+  const availableSports = (sports.data ?? []).filter(
+    (s) => typeof s.name === 'string' && s.name.trim().length > 0,
+  );
 
   return (
     <div className="mx-5 flex flex-col gap-5">
       <CreateMatchForm
         sports={availableSports}
-        teamIds={availableTeams}
+        teams={availableTeams}
         pending={create.isPending}
         onCreate={(args) => create.mutate(args)}
       />
@@ -131,6 +151,7 @@ function MatchesTabInner({ eventId }: { eventId: string }) {
             key={m.id}
             id={m.id}
             data={m}
+            teams={availableTeams}
             usersByEmail={usersByEmail}
             onPatch={(patch) => updateMatch.mutate({ id: m.id, patch })}
             onRemove={() => remove.mutate(m.id)}
@@ -143,12 +164,12 @@ function MatchesTabInner({ eventId }: { eventId: string }) {
 
 function CreateMatchForm({
   sports,
-  teamIds,
+  teams,
   pending,
   onCreate,
 }: {
   sports: { id: string; name: string }[];
-  teamIds: TeamId[];
+  teams: TeamOption[];
   pending: boolean;
   onCreate: (args: {
     sportId: string;
@@ -166,9 +187,9 @@ function CreateMatchForm({
   const [error, setError] = useState<string | null>(null);
 
   const canCreate =
-    sports.length > 0 && teamIds.length >= 2 && sportId && teamAId && teamBId && teamAId !== teamBId;
+    sports.length > 0 && teams.length >= 2 && sportId && teamAId && teamBId && teamAId !== teamBId;
 
-  if (sports.length === 0 || teamIds.length < 2) {
+  if (sports.length === 0 || teams.length < 2) {
     return (
       <p className="rounded-xl border border-dashed border-line px-4 py-4 text-center font-mono text-[11px] uppercase tracking-[0.08em] text-ink-mute">
         Add at least 2 teams and 1 sport before creating matches.
@@ -210,9 +231,9 @@ function CreateMatchForm({
             className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm uppercase focus:border-accent focus:outline-none"
           >
             <option value="">Pick…</option>
-            {teamIds.map((id) => (
-              <option key={id} value={id}>
-                {TEAM_LABEL[id]}
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
               </option>
             ))}
           </select>
@@ -224,11 +245,11 @@ function CreateMatchForm({
             className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm uppercase focus:border-accent focus:outline-none"
           >
             <option value="">Pick…</option>
-            {teamIds
-              .filter((id) => id !== teamAId)
-              .map((id) => (
-                <option key={id} value={id}>
-                  {TEAM_LABEL[id]}
+            {teams
+              .filter((t) => t.id !== teamAId)
+              .map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
                 </option>
               ))}
           </select>
@@ -269,12 +290,14 @@ function CreateMatchForm({
 function MatchRow({
   id,
   data,
+  teams,
   usersByEmail,
   onPatch,
   onRemove,
 }: {
   id: string;
   data: MatchDoc;
+  teams: TeamOption[];
   usersByEmail: Map<string, string>;
   onPatch: (patch: Partial<MatchDoc>) => void;
   onRemove: () => void;
@@ -291,7 +314,7 @@ function MatchRow({
       >
         <span className="min-w-0 flex-1">
           <span className="block font-display text-base uppercase">
-            {TEAM_LABEL[data.teamAId]} <span className="text-ink-dim">vs</span> {TEAM_LABEL[data.teamBId]}
+            {teamNameFor(data.teamAId, teams)} <span className="text-ink-dim">vs</span> {teamNameFor(data.teamBId, teams)}
           </span>
           <span className="block font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
             {data.sportId} · {data.scheduledStart ? formatDateTime(data.scheduledStart) : 'unscheduled'} · {data.venue || 'no venue'}
@@ -307,7 +330,7 @@ function MatchRow({
           <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
             Score: {data.state.scoreA} – {data.state.scoreB}
             {data.winnerTeamId && (
-              <> · Winner: <span className="text-accent-2">{TEAM_LABEL[data.winnerTeamId]}</span></>
+              <> · Winner: <span className="text-accent-2">{teamNameFor(data.winnerTeamId, teams)}</span></>
             )}
           </p>
 
@@ -377,6 +400,7 @@ function MatchRow({
                 state={data.state}
                 teamAId={data.teamAId}
                 teamBId={data.teamBId}
+                teams={teams}
                 onFinalize={(winnerTeamId) => onPatch({ status: 'final', winnerTeamId })}
               />
             )}
@@ -412,11 +436,13 @@ function FinalizeButton({
   state,
   teamAId,
   teamBId,
+  teams,
   onFinalize,
 }: {
   state: MatchDoc['state'];
   teamAId: TeamId;
   teamBId: TeamId;
+  teams: TeamOption[];
   onFinalize: (winnerTeamId: TeamId | null) => void;
 }) {
   const auto =
@@ -429,12 +455,12 @@ function FinalizeButton({
     <Button
       type="button"
       onClick={() => {
-        const label = auto ? TEAM_LABEL[auto] : 'a draw';
+        const label = auto ? teamNameFor(auto, teams) : 'a draw';
         if (window.confirm(`Finalize with ${label}?`)) onFinalize(auto);
       }}
       className="!w-auto !px-4 !py-2"
     >
-      Finalize → {auto ? TEAM_LABEL[auto] : 'Draw'}
+      Finalize → {auto ? teamNameFor(auto, teams) : 'Draw'}
     </Button>
   );
 }
