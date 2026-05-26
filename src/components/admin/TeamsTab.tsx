@@ -7,7 +7,7 @@ import { Avatar } from '@/components/shared/Avatar';
 import { Button } from '@/components/shared/Button';
 import { teamRef, teamsCol } from '@/lib/db';
 import { storage } from '@/lib/firebase';
-import { COLOR_SLOTS, colorVarFor, flagInitials, type ColorSlot } from '@/types/team';
+import { TEAM_PALETTE, colorVarFor, colorLabelFor, flagInitials } from '@/types/team';
 import { suggestTeamColor, type ColorSuggestion } from '@/lib/suggestTeamColor';
 import type { TeamDoc } from '@/types/player';
 import { FormField, TextInput } from './FormField';
@@ -37,7 +37,7 @@ function TeamsTabInner({ eventId }: { eventId: string }) {
   const create = useMutation({
     mutationFn: async (args: {
       name: string;
-      color: ColorSlot;
+      color: string;
       jerseyUrl: string | null;
     }) => {
       const id = slugify(args.name);
@@ -115,16 +115,18 @@ function CreateTeamForm({
   existingColors,
 }: {
   eventId: string;
-  onCreate: (args: { name: string; color: ColorSlot; jerseyUrl: string | null }) => void;
+  onCreate: (args: { name: string; color: string; jerseyUrl: string | null }) => void;
   pending: boolean;
   error: string | null;
-  existingColors: ColorSlot[];
+  existingColors: string[];
 }) {
   const [name, setName] = useState('');
   const [jerseyUrl, setJerseyUrl] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<ColorSuggestion[] | null>(null);
-  const [picked, setPicked] = useState<ColorSlot | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  const takenSet = new Set(existingColors.map((c) => c.toLowerCase()));
 
   const analyze = useMutation({
     // Accept the path as an argument so we can kick this off from
@@ -159,7 +161,19 @@ function CreateTeamForm({
   });
 
   const nameValid = name.trim().length > 0;
-  const allColorsTaken = existingColors.length >= 4;
+  const availablePalette = TEAM_PALETTE.filter((c) => !takenSet.has(c.hex.toLowerCase()));
+  const allColorsTaken = availablePalette.length === 0;
+  // Rank: AI top suggestions float to the front of the swatch row.
+  const aiRank = new Map<string, number>();
+  (suggestions ?? []).forEach((s, i) => {
+    aiRank.set(s.color.toLowerCase(), i);
+  });
+  const swatches = [...TEAM_PALETTE].sort((a, b) => {
+    const ai = aiRank.get(a.hex.toLowerCase()) ?? 99;
+    const bi = aiRank.get(b.hex.toLowerCase()) ?? 99;
+    if (ai !== bi) return ai - bi;
+    return 0;
+  });
 
   return (
     <section className="flex flex-col gap-3">
@@ -169,7 +183,7 @@ function CreateTeamForm({
 
       {allColorsTaken && (
         <p className="rounded-xl border border-accent/40 bg-accent/10 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.06em] text-accent">
-          All 4 color slots are taken — delete a team before adding another.
+          Every palette color is taken — delete a team before adding another.
         </p>
       )}
 
@@ -236,22 +250,29 @@ function CreateTeamForm({
         </p>
       )}
 
-      {jerseyUrl && (
+      {/* Show the palette as soon as a name is entered, even before a jersey
+          is uploaded. AI suggestions float to the top of the swatch row + a
+          rationale strip appears above once analysis finishes. */}
+      {nameValid && (
         <FormField
           label="Pick color"
-          hint="Step 3 of 3 · AI suggestions appear at top once analysis finishes."
+          hint={
+            jerseyUrl
+              ? 'Step 3 of 3 · AI matches appear with rationale; tap any swatch to override.'
+              : 'Pick any palette color, or upload a jersey above to get AI matches.'
+          }
         >
           <div className="flex flex-col gap-2">
-            {/* AI suggestions (cards with rationale) */}
+            {/* AI status / rationale strip */}
             {analyze.isPending && (
               <p className="rounded-xl border border-dashed border-accent-2/40 bg-accent-2/5 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.06em] text-accent-2">
-                ✨ Analyzing jersey colors with AI…
+                ✨ Analyzing jersey colors with AI… palette is live below, pick anytime
               </p>
             )}
             {suggestions && suggestions.length > 0 && (
               <div className="flex flex-col gap-1.5">
                 {suggestions.map((s, idx) => {
-                  const isPicked = picked === s.color;
+                  const isPicked = picked?.toLowerCase() === s.color.toLowerCase();
                   return (
                     <button
                       key={s.color}
@@ -273,7 +294,7 @@ function CreateTeamForm({
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1.5">
                           <span className="font-display text-sm uppercase tracking-[0.06em]">
-                            {humanColorName(s.color)}
+                            {colorLabelFor(s.color)}
                           </span>
                           <span className="rounded-md border border-accent-2/40 bg-accent-2/10 px-1 py-0.5 font-mono text-[8px] uppercase tracking-[0.06em] text-accent-2">
                             AI {idx + 1}
@@ -297,33 +318,36 @@ function CreateTeamForm({
               </div>
             )}
 
-            {/* Static all-colors row — taken colors greyed out + disabled */}
+            {/* Full palette row — always rendered. Taken colors are greyed
+                out and disabled (visible so admins see what's claimed).
+                AI top picks float to the front with a small rank chip. */}
             <div className="mt-1">
               <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-mute">
-                Or pick any
+                Palette · {availablePalette.length}/{TEAM_PALETTE.length} available
               </p>
-              <div className="flex gap-2">
-                {COLOR_SLOTS.map((c) => {
-                  const taken = existingColors.includes(c);
-                  const isPicked = picked === c;
+              <div className="grid grid-cols-7 gap-2">
+                {swatches.map((c) => {
+                  const taken = takenSet.has(c.hex.toLowerCase());
+                  const isPicked = picked?.toLowerCase() === c.hex.toLowerCase();
+                  const rank = aiRank.get(c.hex.toLowerCase());
                   return (
                     <button
-                      key={c}
+                      key={c.hex}
                       type="button"
                       disabled={taken}
-                      onClick={() => !taken && setPicked(c)}
-                      aria-label={`${humanColorName(c)}${taken ? ' (taken)' : ''}`}
-                      title={taken ? `${humanColorName(c)} — already used` : humanColorName(c)}
+                      onClick={() => !taken && setPicked(c.hex)}
+                      aria-label={`${c.label}${taken ? ' (taken)' : ''}`}
+                      title={taken ? `${c.label} — already used` : c.label}
                       className={clsx(
-                        'grid h-11 w-11 place-items-center rounded-full transition',
+                        'relative grid h-10 w-10 place-items-center rounded-full transition',
                         taken ? 'cursor-not-allowed' : 'active:scale-[0.96]',
                       )}
                       style={{
-                        background: colorVarFor(c),
+                        background: c.hex,
                         opacity: taken ? 0.25 : 1,
                         filter: taken ? 'grayscale(0.6)' : undefined,
                         boxShadow: isPicked
-                          ? `0 0 0 2px var(--ink), 0 0 0 4px ${colorVarFor(c)}`
+                          ? `0 0 0 2px var(--ink), 0 0 0 4px ${c.hex}`
                           : undefined,
                       }}
                     >
@@ -332,6 +356,14 @@ function CreateTeamForm({
                       ) : isPicked ? (
                         <span className="font-mono text-[10px] font-bold text-bg">✓</span>
                       ) : null}
+                      {rank !== undefined && !taken && (
+                        <span
+                          aria-hidden
+                          className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full border border-bg bg-accent-2 font-mono text-[8px] font-bold text-bg"
+                        >
+                          {rank + 1}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -366,23 +398,10 @@ function CreateTeamForm({
           setPicked(null);
         }}
       >
-        {pending ? 'Creating…' : picked ? `Create ${name.trim() || 'team'} (${humanColorName(picked)})` : 'Create team'}
+        {pending ? 'Creating…' : picked ? `Create ${name.trim() || 'team'} (${colorLabelFor(picked)})` : 'Create team'}
       </Button>
     </section>
   );
-}
-
-function humanColorName(slot: ColorSlot): string {
-  switch (slot) {
-    case 'accent':
-      return 'Lava';
-    case 'accent-2':
-      return 'Lime';
-    case 'accent-3':
-      return 'Cyan';
-    case 'accent-4':
-      return 'Pink';
-  }
 }
 
 function TeamCard({ team, onOpen }: { team: TeamWithId; onOpen: () => void }) {

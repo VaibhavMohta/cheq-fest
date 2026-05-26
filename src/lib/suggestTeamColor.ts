@@ -1,20 +1,20 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from './firebase';
-import type { ColorSlot } from '@/types/team';
 
 export type ColorSuggestion = {
-  color: ColorSlot;
+  /** Hex of the picked palette entry, e.g. "#ff4a1c". */
+  color: string;
   rationale: string;
 };
 
 const callable = httpsCallable<
-  { storagePath: string; excludeColors: ColorSlot[] },
+  { storagePath: string; excludeColors: string[] },
   { suggestions: ColorSuggestion[] }
 >(functions, 'suggestTeamColor', { timeout: 60_000 });
 
 export async function suggestTeamColor(args: {
   storagePath: string;
-  excludeColors: ColorSlot[];
+  excludeColors: string[];
 }): Promise<ColorSuggestion[]> {
   const res = await callable(args);
   return res.data.suggestions;

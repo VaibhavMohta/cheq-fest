@@ -1,7 +1,6 @@
 /**
- * AI color recommender — looks at a jersey photo and picks which of the 4
- * brand color slots best matches, skipping any already claimed by other
- * teams in this event.
+ * AI color recommender — looks at a jersey photo and picks which of the
+ * available palette colors best matches the jersey's dominant tones.
  *
  * Uses Claude Haiku 4.5 with vision (cheapest tier; this is a quick visual
  * judgment task and doesn't need Sonnet). Returns 1-3 ranked suggestions.
@@ -19,15 +18,29 @@ const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
 const MODEL = 'claude-haiku-4-5';
 
-const COLOR_SLOTS = ['accent', 'accent-2', 'accent-3', 'accent-4'] as const;
-type ColorSlot = (typeof COLOR_SLOTS)[number];
+/**
+ * Standard team palette. Mirrors `TEAM_PALETTE` in `src/types/team.ts`.
+ * Stored value on team docs is the hex string. Keep these in sync if you
+ * add or remove entries on the client.
+ */
+const PALETTE: { hex: string; label: string }[] = [
+  { hex: '#ff4a1c', label: 'Lava (warm orange-red, brand accent)' },
+  { hex: '#e8ff4a', label: 'Lime (electric neon yellow-green, brand accent)' },
+  { hex: '#4ad4ff', label: 'Cyan (bright sky blue, brand accent)' },
+  { hex: '#ff4ad0', label: 'Pink (vivid magenta, brand accent)' },
+  { hex: '#e63946', label: 'Red (classic jersey red)' },
+  { hex: '#1d4ed8', label: 'Royal Blue (deep saturated blue)' },
+  { hex: '#16a34a', label: 'Green (kelly / pitch green)' },
+  { hex: '#facc15', label: 'Yellow (sunflower / amber)' },
+  { hex: '#7c3aed', label: 'Purple (royal violet)' },
+  { hex: '#0f766e', label: 'Teal (deep blue-green)' },
+  { hex: '#f97316', label: 'Orange (pumpkin / safety orange)' },
+  { hex: '#0ea5e9', label: 'Sky (medium azure)' },
+  { hex: '#a16207', label: 'Maroon (dark earthy red-brown)' },
+  { hex: '#f5f1e8', label: 'White (off-white / cream)' },
+];
 
-const COLOR_INFO: Record<ColorSlot, { hex: string; description: string }> = {
-  accent: { hex: '#ff4a1c', description: 'lava orange — warm, energetic' },
-  'accent-2': { hex: '#e8ff4a', description: 'electric lime — bright, neon-green-yellow' },
-  'accent-3': { hex: '#4ad4ff', description: 'signal cyan — cool, sky-blue' },
-  'accent-4': { hex: '#ff4ad0', description: 'hot pink — vivid, magenta-pink' },
-};
+const PALETTE_HEXES = PALETTE.map((p) => p.hex);
 
 const SUGGESTIONS_SCHEMA = {
   type: 'object',
@@ -43,12 +56,14 @@ const SUGGESTIONS_SCHEMA = {
         properties: {
           color: {
             type: 'string',
-            enum: COLOR_SLOTS,
-            description: 'Which of the 4 brand color slots best matches.',
+            enum: PALETTE_HEXES,
+            description:
+              'Hex of the palette entry that best matches the jersey. Must be one of the listed hexes.',
           },
           rationale: {
             type: 'string',
-            description: 'One-sentence reason this color matches the jersey.',
+            description:
+              'One-sentence reason this color matches the jersey, referencing the actual colors you see.',
           },
         },
       },
@@ -56,7 +71,7 @@ const SUGGESTIONS_SCHEMA = {
   },
 } as const;
 
-type Suggestion = { color: ColorSlot; rationale: string };
+type Suggestion = { color: string; rationale: string };
 
 export const suggestTeamColor = onCall(
   { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 60, memory: '512MiB' },
@@ -75,12 +90,12 @@ export const suggestTeamColor = onCall(
       throw new HttpsError('invalid-argument', '`storagePath` is required.');
     }
 
-    const exclude = new Set(excludeColors ?? []);
-    const available = COLOR_SLOTS.filter((c) => !exclude.has(c));
+    const excluded = new Set((excludeColors ?? []).map((c) => c.toLowerCase()));
+    const available = PALETTE.filter((p) => !excluded.has(p.hex.toLowerCase()));
     if (available.length === 0) {
       throw new HttpsError(
         'failed-precondition',
-        'All 4 colors are already used — no more teams can be created in this event.',
+        'Every palette color is already claimed in this event.',
       );
     }
 
@@ -103,14 +118,16 @@ export const suggestTeamColor = onCall(
     const key = ANTHROPIC_API_KEY.value();
     if (!key) {
       logger.warn('ANTHROPIC_API_KEY not set — returning stub suggestion.');
-      return { suggestions: available.slice(0, 2).map((color) => ({
-        color,
-        rationale: 'Stub suggestion (no API key set).',
-      })) };
+      return {
+        suggestions: available.slice(0, 2).map((p) => ({
+          color: p.hex,
+          rationale: 'Stub suggestion (no API key set).',
+        })),
+      };
     }
 
     const client = new Anthropic({ apiKey: key });
-    const prompt = buildPrompt(available, Array.from(exclude) as ColorSlot[]);
+    const prompt = buildPrompt(available, PALETTE.filter((p) => excluded.has(p.hex.toLowerCase())));
 
     const response = await client.messages.create({
       model: MODEL,
@@ -152,10 +169,13 @@ export const suggestTeamColor = onCall(
 
     // Defense in depth — strip any suggestion that uses a now-claimed slot
     // (the model shouldn't, given the prompt, but better safe than sorry).
-    parsed.suggestions = parsed.suggestions.filter((s) => available.includes(s.color));
+    const availableHexes = new Set(available.map((p) => p.hex.toLowerCase()));
+    parsed.suggestions = parsed.suggestions.filter((s) =>
+      availableHexes.has(s.color.toLowerCase()),
+    );
     if (parsed.suggestions.length === 0) {
-      parsed.suggestions = available.slice(0, 1).map((color) => ({
-        color,
+      parsed.suggestions = available.slice(0, 1).map((p) => ({
+        color: p.hex,
         rationale: 'Fallback — model suggestions all matched claimed slots.',
       }));
     }
@@ -192,28 +212,35 @@ export const suggestTeamColor = onCall(
   },
 );
 
-function buildPrompt(available: ColorSlot[], excluded: ColorSlot[]): string {
-  const availLines = available
-    .map((c) => `  - "${c}" (${COLOR_INFO[c].hex}, ${COLOR_INFO[c].description})`)
-    .join('\n');
+function buildPrompt(
+  available: { hex: string; label: string }[],
+  excluded: { hex: string; label: string }[],
+): string {
+  const availLines = available.map((p) => `  - "${p.hex}" — ${p.label}`).join('\n');
   const excludedLines = excluded.length
-    ? `\nALREADY TAKEN by other teams in this event — do NOT recommend:\n${excluded
-        .map((c) => `  - "${c}" (${COLOR_INFO[c].hex})`)
+    ? `\nALREADY TAKEN by other teams in this event — DO NOT suggest these:\n${excluded
+        .map((p) => `  - "${p.hex}" — ${p.label}`)
         .join('\n')}`
     : '';
 
   return `You are looking at a sports jersey photo for a company sports fest.
-Pick which of the available brand color slots best matches the jersey's
-dominant colors. The visual app will use this slot to color the team's
-avatar, leaderboard flag, arena dot, and scoreboard.
+Your job is to pick the palette colors that most closely match the jersey's
+dominant visible colors — primary first, then secondary if present.
 
-Available color slots:
+Look at the actual hues on the fabric (ignore shadows, logos, lighting, and
+white skin/background). Identify the 1-3 dominant colors of the jersey
+itself and match each to the closest available palette entry below.
+
+Available palette (each entry is a hex value and a description):
 ${availLines}
 ${excludedLines}
 
-Return 1–3 suggestions in order from best match to acceptable fallback.
-For each, give a one-sentence rationale referring to the actual colors you
-see on the jersey. Do not suggest any color from the "already taken" list.`;
+Return 1–3 suggestions ordered from best match (closest hue to the jersey's
+primary color) to acceptable fallback. For each, the rationale must name
+the actual color you see on the jersey ("the jersey is dominantly cobalt
+blue with white sleeves" → suggest Royal Blue). Do NOT suggest any color
+from the "already taken" list. If the jersey is multi-color, pick the
+dominant block color, not the trim.`;
 }
 
 // Haiku 4.5 rates per million tokens (USD).

@@ -1,5 +1,5 @@
 import type { Timestamp } from 'firebase/firestore';
-import type { ColorSlot, TeamId } from './team';
+import type { TeamId } from './team';
 
 export type StagedPlayerDoc = {
   email: string;
@@ -27,8 +27,10 @@ export type UserDoc = {
 
 export type TeamDoc = {
   name: string;
-  /** Color slot — one of `accent | accent-2 | accent-3 | accent-4`. */
-  color: ColorSlot;
+  /** Team color — either a hex string (e.g. "#ff4a1c", the standard for new
+   *  teams) or one of the legacy accent slot ids. Pass through
+   *  `colorVarFor()` from `@/types/team` to render. */
+  color: string;
   logoUrl: string | null;
   jerseyUrl: string | null;
   /** Lowercased emails of the team's roster. Survives the staged→claimed
