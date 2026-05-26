@@ -190,7 +190,15 @@ function LineupEditor({
   }, [team, people, roster?.sportCaptainEmail]);
 
   // Initial state — any team member not already in pitch/tentative/subs
-  // defaults to notPlaying so they appear somewhere.
+  // defaults to notPlaying so they appear somewhere. Order matters:
+  //   1. Read whatever buckets are persisted (lowercased).
+  //   2. Mark those emails as "known".
+  //   3. Auto-park the Sport Captain on the pitch if they're not yet
+  //      placed — *and* add them to `known` so the remainder pass below
+  //      doesn't ALSO drop them into notPlaying (the bug that put the
+  //      captain into both pitch and notPlaying).
+  //   4. Compute remainder = team.members - known and merge into
+  //      notPlaying so every team member appears somewhere exactly once.
   const initial: LineupState = useMemo(() => {
     const empty: LineupState = {
       pitch: [],
@@ -199,23 +207,45 @@ function LineupEditor({
       notPlaying: [],
     };
     if (!team) return empty;
-    const known = new Set<string>();
-    const pitch = (roster?.pitch ?? []).map((e) => e.toLowerCase());
-    const tentative = (roster?.tentative ?? []).map((e) => e.toLowerCase());
-    const substitutes = (roster?.substitutes ?? []).map((e) => e.toLowerCase());
-    const notPlaying = (roster?.notPlaying ?? []).map((e) => e.toLowerCase());
-    for (const e of [...pitch, ...tentative, ...substitutes, ...notPlaying]) known.add(e);
+
+    // Cross-bucket dedup. If a stored roster has the same email in two
+    // buckets (e.g. a previous bad write that put the captain in both
+    // pitch and notPlaying), first-placement wins in this priority
+    // order: pitch > tentative > substitutes > notPlaying.
+    const placed = new Set<string>();
+    const take = (raw: string[]): string[] => {
+      const out: string[] = [];
+      for (const r of raw) {
+        const e = r.toLowerCase();
+        if (placed.has(e)) continue;
+        placed.add(e);
+        out.push(e);
+      }
+      return out;
+    };
+    const pitch = take(roster?.pitch ?? []);
+    const tentative = take(roster?.tentative ?? []);
+    const substitutes = take(roster?.substitutes ?? []);
+    const notPlaying = take(roster?.notPlaying ?? []);
+
+    // Auto-park the Sport Captain on pitch before computing the
+    // remainder, so they aren't also added to notPlaying.
+    const capEmail = roster?.sportCaptainEmail?.toLowerCase() ?? null;
+    if (
+      capEmail &&
+      !placed.has(capEmail) &&
+      team.members.some((m) => m.toLowerCase() === capEmail)
+    ) {
+      pitch.unshift(capEmail);
+      placed.add(capEmail);
+    }
+
+    // Anyone on the team but not yet in a bucket defaults to notPlaying.
     const remainder = team.members
       .map((e) => e.toLowerCase())
-      .filter((e) => !known.has(e));
-    // Also auto-park the Sport Captain on the pitch if they're not yet
-    // placed — keeps the "captain locked to pitch" invariant immediately
-    // after assignment.
-    const capEmail = roster?.sportCaptainEmail?.toLowerCase() ?? null;
-    if (capEmail && !known.has(capEmail) && team.members.some((m) => m.toLowerCase() === capEmail)) {
-      pitch.unshift(capEmail);
-      known.add(capEmail);
-    }
+      .filter((e) => !placed.has(e));
+    for (const e of remainder) placed.add(e);
+
     return {
       pitch,
       tentative,
