@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { doc, onSnapshot, query, where } from 'firebase/firestore';
+import { collectionGroup, doc, onSnapshot, query, where } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import { db } from './firebase';
 import { teamsCol } from './db';
@@ -109,6 +109,15 @@ export function useRole(): RoleState {
    * needing a Cloud Function to mirror the value into `users/{uid}`.
    */
   const [liveGroupCaptainOf, setLiveGroupCaptainOf] = useState<TeamId[]>([]);
+  /**
+   * Derived live from roster docs (collectionGroup query) where
+   * `sportCaptainEmail === me`. Scoped client-side to the active event so
+   * we don't leak cross-event captaincy into the dropdown. Each entry
+   * resolves the roster's path → { sportId, teamId }.
+   */
+  const [liveSportCaptainOf, setLiveSportCaptainOf] = useState<
+    { sportId: string; teamId: TeamId }[]
+  >([]);
   const [storedActiveMode, setStoredActiveMode] = useState<Role | null>(() => {
     if (typeof window === 'undefined') return null;
     const raw = window.localStorage.getItem(LS_ACTIVE_MODE);
@@ -152,6 +161,40 @@ export function useRole(): RoleState {
         // Permission denied for guest reads etc — fall back to empty.
         setLiveGroupCaptainOf([]);
       },
+    );
+  }, [userEmail, activeEventId]);
+
+  // Live sport-captain detection — collectionGroup query over every
+  // roster doc where `sportCaptainEmail` matches the signed-in user.
+  // The roster path is `events/{eventId}/teams/{teamId}/rosters/{sportId}`;
+  // we derive both ids from snap.ref so we don't need a separate query
+  // per team. Scoped to the active event client-side.
+  useEffect(() => {
+    if (!userEmail || !activeEventId) {
+      setLiveSportCaptainOf([]);
+      return;
+    }
+    const q = query(
+      collectionGroup(db, 'rosters'),
+      where('sportCaptainEmail', '==', userEmail),
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        const out: { sportId: string; teamId: TeamId }[] = [];
+        for (const d of snap.docs) {
+          // path: events/{eventId}/teams/{teamId}/rosters/{sportId}
+          const parts = d.ref.path.split('/');
+          const ev = parts[1];
+          const teamId = parts[3];
+          const sportId = parts[5];
+          if (ev === activeEventId && teamId && sportId) {
+            out.push({ sportId, teamId });
+          }
+        }
+        setLiveSportCaptainOf(out);
+      },
+      () => setLiveSportCaptainOf([]),
     );
   }, [userEmail, activeEventId]);
 
@@ -219,7 +262,19 @@ export function useRole(): RoleState {
   const groupCaptainOf = Array.from(
     new Set<TeamId>([...(doc_?.groupCaptainOf ?? []), ...liveGroupCaptainOf]),
   );
-  const sportCaptainOf = doc_?.sportCaptainOf ?? [];
+  // Union the denormalized sport-captain list with the live roster-doc
+  // subscription. Deduped on the `sportId|teamId` composite key.
+  const sportCaptainOf = (() => {
+    const seen = new Set<string>();
+    const out: { sportId: string; teamId: TeamId }[] = [];
+    for (const entry of [...(doc_?.sportCaptainOf ?? []), ...liveSportCaptainOf]) {
+      const key = `${entry.sportId}|${entry.teamId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(entry);
+    }
+    return out;
+  })();
   const perMatchReferee = doc_?.perMatchReferee ?? [];
   if (groupCaptainOf.length > 0) all.add('group-cap');
   if (sportCaptainOf.length > 0) all.add('sport-cap');
