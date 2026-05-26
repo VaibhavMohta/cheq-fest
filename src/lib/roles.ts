@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, query, where } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import { db } from './firebase';
+import { teamsCol } from './db';
+import { useActiveEvent } from './activeEvent';
 import { useAuth } from './auth';
 import type { TeamId } from '@/types/team';
 
@@ -94,10 +96,19 @@ export function useRole(): RoleState {
   const authState = useAuth();
   const uid = authState.status === 'signedIn' ? authState.user.uid : null;
   const user = authState.status === 'signedIn' ? authState.user : null;
+  const userEmail = user?.email?.toLowerCase() ?? null;
+  const { activeEventId } = useActiveEvent();
 
   const [doc_, setDoc] = useState<UserDoc | null>(null);
   const [claims, setClaims] = useState<{ admin?: boolean; superAdmin?: boolean }>({});
   const [docLoading, setDocLoading] = useState(true);
+  /**
+   * Derived live from team docs in the active event — `team.groupCaptainEmail
+   * === me`. This means the moment an admin assigns this user as Group
+   * Captain via the Teams tab, the role surfaces in the dropdown without
+   * needing a Cloud Function to mirror the value into `users/{uid}`.
+   */
+  const [liveGroupCaptainOf, setLiveGroupCaptainOf] = useState<TeamId[]>([]);
   const [storedActiveMode, setStoredActiveMode] = useState<Role | null>(() => {
     if (typeof window === 'undefined') return null;
     const raw = window.localStorage.getItem(LS_ACTIVE_MODE);
@@ -117,6 +128,32 @@ export function useRole(): RoleState {
       setDocLoading(false);
     });
   }, [uid]);
+
+  // Live group-captain detection — watch teams in the active event where
+  // `groupCaptainEmail` matches the signed-in user. This means assigning a
+  // GC via the admin Teams tab surfaces the role in the dropdown
+  // immediately, without waiting for a Cloud Function to mirror the value
+  // into `users/{uid}.groupCaptainOf`.
+  useEffect(() => {
+    if (!userEmail || !activeEventId) {
+      setLiveGroupCaptainOf([]);
+      return;
+    }
+    const q = query(
+      teamsCol(activeEventId),
+      where('groupCaptainEmail', '==', userEmail),
+    );
+    return onSnapshot(
+      q,
+      (snap) => {
+        setLiveGroupCaptainOf(snap.docs.map((d) => d.id as TeamId));
+      },
+      () => {
+        // Permission denied for guest reads etc — fall back to empty.
+        setLiveGroupCaptainOf([]);
+      },
+    );
+  }, [userEmail, activeEventId]);
 
   // Pull custom claims for admin/super-admin status.
   useEffect(() => {
@@ -176,7 +213,12 @@ export function useRole(): RoleState {
   if (doc_?.teamId) all.add('player');
   if (claims.superAdmin) all.add('super-admin');
   if (claims.admin) all.add('admin');
-  const groupCaptainOf = doc_?.groupCaptainOf ?? [];
+  // Union the denormalized (`users/{uid}.groupCaptainOf`, written by the
+  // sync function — when it exists) with the live team-doc subscription.
+  // Either source can light up the role; live wins when both differ.
+  const groupCaptainOf = Array.from(
+    new Set<TeamId>([...(doc_?.groupCaptainOf ?? []), ...liveGroupCaptainOf]),
+  );
   const sportCaptainOf = doc_?.sportCaptainOf ?? [];
   const perMatchReferee = doc_?.perMatchReferee ?? [];
   if (groupCaptainOf.length > 0) all.add('group-cap');
