@@ -18,6 +18,14 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (request.auth.token.admin == true || isSuperAdmin());
     }
+    // The signed-in user is the Group Captain of (eventId, teamId).
+    // GC membership is stored as an email on the team doc — survives the
+    // staged → claimed sign-in transition without rewriting team docs.
+    function isGroupCaptainOfTeam(eventId, teamId) {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/events/$(eventId)/teams/$(teamId))
+          .data.groupCaptainEmail == request.auth.token.email;
+    }
 
     // Public reads, admin-only writes on the event tree.
     match /events/{eventId} {
@@ -33,14 +41,19 @@ service cloud.firestore {
         allow read: if true;
         allow write: if isAdmin();
 
-        // Sport Captain writes rosters for their own (teamId, sportId).
+        // Roster writes come from three places:
+        //   - Admin / Super Admin: anything goes.
+        //   - Group Captain of this team: assigns the Sport Captain.
+        //   - Sport Captain of this (teamId, sportId): fills the four
+        //     buckets in the lineup editor. Captain identity is stored as
+        //     an email so staged → claimed transitions don't break.
         match /rosters/{sportId} {
           allow read: if true;
           allow write: if isAdmin()
+                       || isGroupCaptainOfTeam(eventId, teamId)
                        || (isSignedIn()
-                           && request.auth.uid ==
-                              get(/databases/$(database)/documents/events/$(eventId)/teams/$(teamId)/rosters/$(sportId))
-                                 .data.sportCaptainUid);
+                           && get(/databases/$(database)/documents/events/$(eventId)/teams/$(teamId)/rosters/$(sportId))
+                                .data.sportCaptainEmail == request.auth.token.email);
         }
       }
 

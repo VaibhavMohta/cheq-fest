@@ -14,6 +14,17 @@ import type { AiUsageDoc } from '@/types/ai';
 import type { StagedPlayerDoc, TeamDoc, UserDoc } from '@/types/player';
 import type { TeamId } from '@/types/team';
 
+/** Per-(team, sport) roster doc. Owned by the Group Captain (who assigns
+ *  the Sport Captain) and then by the Sport Captain (who fills the four
+ *  buckets). Stored at `events/{e}/teams/{t}/rosters/{sportId}`. */
+export type RosterDoc = {
+  sportCaptainEmail: string | null;
+  pitch: string[];
+  tentative: string[];
+  substitutes: string[];
+  notPlaying: string[];
+};
+
 // Generic identity converter that preserves the type of the document body.
 // Firestore reads/writes hit this; it's a runtime no-op, but it gives every
 // helper below a typed view of the docs.
@@ -64,6 +75,20 @@ export const sportsCol = (eventId: string): CollectionReference<SportDoc> =>
 
 export const sportRef = (eventId: string, sportId: string): DocumentReference<SportDoc> =>
   doc(sportsCol(eventId), sportId);
+
+export const rostersCol = (
+  eventId: string,
+  teamId: TeamId,
+): CollectionReference<RosterDoc> =>
+  collection(db, 'events', eventId, 'teams', teamId, 'rosters').withConverter(
+    converter<RosterDoc>(),
+  );
+
+export const rosterRef = (
+  eventId: string,
+  teamId: TeamId,
+  sportId: string,
+): DocumentReference<RosterDoc> => doc(rostersCol(eventId, teamId), sportId);
 
 export const matchesCol = (eventId: string): CollectionReference<MatchDoc> =>
   collection(db, 'events', eventId, 'matches').withConverter(converter<MatchDoc>());
