@@ -22,6 +22,7 @@ import { EventLog } from '@/components/referee/EventLog';
 import { MatchSwitcher, type SwitcherMatch } from '@/components/referee/MatchSwitcher';
 import { useAuth } from '@/lib/auth';
 import { useRole } from '@/lib/roles';
+import { useActiveEvent } from '@/lib/activeEvent';
 import {
   matchesCol,
   matchRef,
@@ -35,6 +36,7 @@ import type { SportDoc, TrackableEvent } from '@/types/sport';
 export default function RefereeScreen() {
   const auth = useAuth();
   const role = useRole();
+  const { activeEventId, event: activeEvent } = useActiveEvent();
   const uid = auth.status === 'signedIn' ? auth.user.uid : null;
   const isAdmin = role.is('admin') || role.is('super-admin');
 
@@ -46,14 +48,15 @@ export default function RefereeScreen() {
   }, []);
 
   const myMatches = useQuery({
-    queryKey: ['referee', 'myMatches', uid, isAdmin],
-    enabled: !!uid,
+    queryKey: ['referee', 'myMatches', uid, isAdmin, activeEventId],
+    enabled: !!uid && !!activeEventId,
     queryFn: async (): Promise<SwitcherMatch[]> => {
+      if (!activeEventId) return [];
       // Admins see every live + scheduled match. Refs see their assignments.
       const constraints = isAdmin
         ? [where('status', 'in', ['live', 'scheduled', 'final'])]
         : [where('refereeUids', 'array-contains', uid)];
-      const snap = await getDocs(query(matchesCol, ...constraints));
+      const snap = await getDocs(query(matchesCol(activeEventId), ...constraints));
       return snap.docs.map((d) => ({
         id: d.id,
         teamAId: d.data().teamAId,
@@ -135,37 +138,52 @@ export default function RefereeScreen() {
           current={activeId ?? ''}
           onChange={setActiveId}
         />
-        {activeId && <RefereePanel matchId={activeId} meUid={uid!} />}
+        {activeId && activeEventId && (
+          <RefereePanel matchId={activeId} eventId={activeEventId} meUid={uid!} />
+        )}
+        {activeEvent && (
+          <p className="mx-5 mt-3 text-center font-mono text-[10px] uppercase tracking-[0.06em] text-ink-mute">
+            Event · {activeEvent.name}
+          </p>
+        )}
       </main>
     </>
   );
 }
 
-function RefereePanel({ matchId, meUid }: { matchId: string; meUid: string }) {
+function RefereePanel({
+  matchId,
+  eventId,
+  meUid,
+}: {
+  matchId: string;
+  eventId: string;
+  meUid: string;
+}) {
   const [match, setMatch] = useState<MatchDoc | null>(null);
   const [events, setEvents] = useState<(RefereeEventDoc & { id: string })[]>([]);
 
   // Subscribe to the match doc.
   useEffect(() => {
-    return onSnapshot(matchRef(matchId), (snap) => {
+    return onSnapshot(matchRef(eventId, matchId), (snap) => {
       setMatch(snap.exists() ? snap.data() : null);
     });
-  }, [matchId]);
+  }, [eventId, matchId]);
 
   // Subscribe to the events log.
   useEffect(() => {
-    const q = query(refereeEventsCol(matchId), orderBy('at', 'asc'));
+    const q = query(refereeEventsCol(eventId, matchId), orderBy('at', 'asc'));
     return onSnapshot(q, (snap) => {
       setEvents(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-  }, [matchId]);
+  }, [eventId, matchId]);
 
   const sport = useQuery({
-    queryKey: ['sport', match?.sportId],
+    queryKey: ['sport', eventId, match?.sportId],
     enabled: !!match?.sportId,
     queryFn: async (): Promise<SportDoc | null> => {
       if (!match?.sportId) return null;
-      const all = await getDocs(sportsCol);
+      const all = await getDocs(sportsCol(eventId));
       const found = all.docs.find((d) => d.id === match.sportId);
       return found ? found.data() : null;
     },
@@ -185,7 +203,7 @@ function RefereePanel({ matchId, meUid }: { matchId: string; meUid: string }) {
     value: number | null;
     meta?: Record<string, number | string | boolean>;
   }) {
-    await addDoc(refereeEventsCol(matchId), {
+    await addDoc(refereeEventsCol(eventId, matchId), {
       type: args.type,
       side: args.side,
       value: args.value,
@@ -197,7 +215,7 @@ function RefereePanel({ matchId, meUid }: { matchId: string; meUid: string }) {
   }
 
   async function undo(id: string) {
-    await updateDoc(doc(refereeEventsCol(matchId), id), { undone: true });
+    await updateDoc(doc(refereeEventsCol(eventId, matchId), id), { undone: true });
   }
 
   async function nudgeScore(side: Side, delta: number) {
@@ -208,7 +226,7 @@ function RefereePanel({ matchId, meUid }: { matchId: string; meUid: string }) {
       side === 'A'
         ? { state: { ...match.state, scoreA: Math.max(0, match.state.scoreA + delta) } }
         : { state: { ...match.state, scoreB: Math.max(0, match.state.scoreB + delta) } };
-    await setDoc(matchRef(matchId), patch, { merge: true });
+    await setDoc(matchRef(eventId, matchId), patch, { merge: true });
     // Also write an event so the timeline reflects the change.
     if (delta > 0) {
       await appendEvent({ type: 'goal', side, value: null });

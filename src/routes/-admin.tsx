@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { TopBar } from '@/components/shared/TopBar';
+import { EventBar } from '@/components/shared/EventBar';
 import { AdminTabs, type AdminTab } from '@/components/admin/AdminTabs';
 import { EventTab } from '@/components/admin/EventTab';
 import { PlayersTab } from '@/components/admin/PlayersTab';
@@ -64,6 +65,7 @@ export default function AdminScreen() {
       <TopBar title="Event Setup" />
       <main className="mx-auto max-w-[420px] pb-28">
         <AdminTabs current={tab} onChange={setTab} />
+        <EventBar label="Editing" />
         {tab === 'Event' && <EventTab />}
         {tab === 'Players' && <PlayersTab />}
         {tab === 'Teams' && <TeamsTab />}

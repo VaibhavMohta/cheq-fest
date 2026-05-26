@@ -17,26 +17,31 @@ import { TEAM_LABEL, type TeamId } from '@/types/team';
 import { Button } from '@/components/shared/Button';
 import { Chip, type ChipVariant } from '@/components/shared/Chip';
 import { FormField, TextInput } from './FormField';
+import { RequireEvent } from './RequireEvent';
 
-const MATCHES_QK = ['admin', 'matches'] as const;
-const SPORTS_QK = ['admin', 'sports'] as const;
-const TEAMS_QK = ['admin', 'teams'] as const;
+const matchesQk = (eventId: string) => ['admin', 'matches', eventId] as const;
+const sportsQk = (eventId: string) => ['admin', 'sports', eventId] as const;
+const teamsQk = (eventId: string) => ['admin', 'teams', eventId] as const;
 const USERS_QK = ['admin', 'claimedPlayers'] as const;
 
 export function MatchesTab() {
+  return <RequireEvent>{(_event, eventId) => <MatchesTabInner eventId={eventId} />}</RequireEvent>;
+}
+
+function MatchesTabInner({ eventId }: { eventId: string }) {
   const qc = useQueryClient();
 
   const sports = useQuery({
-    queryKey: SPORTS_QK,
+    queryKey: sportsQk(eventId),
     queryFn: async () => {
-      const snap = await getDocs(sportsCol);
+      const snap = await getDocs(sportsCol(eventId));
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     },
   });
   const teams = useQuery({
-    queryKey: TEAMS_QK,
+    queryKey: teamsQk(eventId),
     queryFn: async () => {
-      const snap = await getDocs(teamsCol);
+      const snap = await getDocs(teamsCol(eventId));
       return snap.docs.map((d) => ({ id: d.id as TeamId, ...d.data() }));
     },
   });
@@ -48,9 +53,9 @@ export function MatchesTab() {
     },
   });
   const matches = useQuery({
-    queryKey: MATCHES_QK,
+    queryKey: matchesQk(eventId),
     queryFn: async () => {
-      const snap = await getDocs(query(matchesCol, orderBy('createdAt', 'desc')));
+      const snap = await getDocs(query(matchesCol(eventId), orderBy('createdAt', 'desc')));
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     },
   });
@@ -69,7 +74,7 @@ export function MatchesTab() {
       scheduledStart: Timestamp | null;
       venue: string;
     }) => {
-      await addDoc(matchesCol, {
+      await addDoc(matchesCol(eventId), {
         ...args,
         refereeUids: [],
         state: emptyMatchState(),
@@ -79,21 +84,21 @@ export function MatchesTab() {
         createdAt: serverTimestamp() as unknown as Timestamp,
       });
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: MATCHES_QK }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: matchesQk(eventId) }),
   });
 
   const updateMatch = useMutation({
     mutationFn: async (args: { id: string; patch: Partial<MatchDoc> }) => {
-      await setDoc(matchRef(args.id), args.patch, { merge: true });
+      await setDoc(matchRef(eventId, args.id), args.patch, { merge: true });
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: MATCHES_QK }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: matchesQk(eventId) }),
   });
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      await deleteDoc(doc(matchesCol, id));
+      await deleteDoc(doc(matchesCol(eventId), id));
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: MATCHES_QK }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: matchesQk(eventId) }),
   });
 
   if (sports.isLoading || teams.isLoading || users.isLoading) {

@@ -12,11 +12,20 @@ import {
 } from '@/lib/db';
 import { useAuth } from '@/lib/auth';
 import { FormField, TextArea, TextInput } from './FormField';
+import { RequireEvent } from './RequireEvent';
 
 const STAGED_QK = ['admin', 'stagedPlayers'] as const;
 const CLAIMED_QK = ['admin', 'claimedPlayers'] as const;
 
 export function PlayersTab() {
+  // Players are global (an email can sign up once and be reused across years)
+  // but we gate the tab on having an active event so admins can't import
+  // players into a vacuum — they're meant to assign them to teams in
+  // the active event right after.
+  return <RequireEvent>{() => <PlayersTabInner />}</RequireEvent>;
+}
+
+function PlayersTabInner() {
   const auth = useAuth();
   const importerUid = auth.status === 'signedIn' ? auth.user.uid : null;
   const qc = useQueryClient();

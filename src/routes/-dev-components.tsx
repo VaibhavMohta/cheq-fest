@@ -5,7 +5,7 @@ import { Chip } from '@/components/shared/Chip';
 import { IconButton } from '@/components/shared/IconButton';
 import { TopBar } from '@/components/shared/TopBar';
 import { BackIcon, MenuIcon } from '@/components/shared/icons';
-import { TEAM_IDS, TEAM_LABEL } from '@/types/team';
+import { TEAM_IDS, teamLabelFor } from '@/types/team';
 
 
 export default function ComponentsShowcase() {
@@ -28,7 +28,7 @@ export default function ComponentsShowcase() {
         <Section title="Avatars · team colors · captain badge">
           <div className="flex flex-wrap items-end gap-4">
             {TEAM_IDS.map((teamId) => (
-              <Stack key={teamId} label={TEAM_LABEL[teamId]}>
+              <Stack key={teamId} label={teamLabelFor(teamId)}>
                 <Avatar name="Shah Mehta" teamId={teamId} size={56} />
               </Stack>
             ))}

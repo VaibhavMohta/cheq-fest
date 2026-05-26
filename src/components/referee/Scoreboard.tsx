@@ -1,4 +1,4 @@
-import { TEAM_COLOR_VAR, TEAM_LABEL, type TeamId } from '@/types/team';
+import { colorVarFor, teamLabelFor, type TeamId } from '@/types/team';
 
 type Props = {
   teamA: TeamId;
@@ -46,7 +46,7 @@ function SideBlock({
   onSubtract: () => void;
   disabled?: boolean;
 }) {
-  const color = TEAM_COLOR_VAR[teamId];
+  const color = colorVarFor(teamId);
   return (
     <div
       className="rounded-3xl border border-line bg-bg-card p-3"
@@ -59,7 +59,7 @@ function SideBlock({
           style={{ background: color }}
         />
         <span className="font-display text-sm uppercase tracking-[0.06em] text-ink">
-          {TEAM_LABEL[teamId]}
+          {teamLabelFor(teamId)}
         </span>
       </div>
       <button
@@ -67,7 +67,7 @@ function SideBlock({
         onClick={onAdd}
         disabled={disabled}
         className="mt-2 grid w-full place-items-center rounded-2xl border border-line bg-bg p-3 transition active:scale-[0.98] disabled:opacity-50"
-        aria-label={`Add point for ${TEAM_LABEL[teamId]}`}
+        aria-label={`Add point for ${teamLabelFor(teamId)}`}
       >
         <span className="font-display text-[64px] leading-none tabular-nums text-ink">
           {score}

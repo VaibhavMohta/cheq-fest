@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { TopBar } from '@/components/shared/TopBar';
 import { SectionTitle } from '@/components/shared/SectionTitle';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { EventBar } from '@/components/shared/EventBar';
 
 export const Route = createFileRoute('/rulebook')({
   component: RulebookScreen,
@@ -16,6 +17,7 @@ function RulebookScreen() {
     <>
       <TopBar title="The Rulebook" />
       <main className="mx-auto max-w-[420px] pb-28">
+        <EventBar />
         <section
           className="mx-5 mb-4 flex items-center gap-4 rounded-2xl border border-line p-5"
           style={{

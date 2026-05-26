@@ -1,37 +1,42 @@
 import { motion } from 'motion/react';
 import type { ArenaType } from '@/types/sport';
-import { ballDuration, ballPath } from '@/lib/arenaLayout';
+import { equipmentDuration, equipmentPath } from '@/lib/arenaLayout';
+import { equipmentFor, equipmentWrapperStyle } from './Equipment';
 
-type Props = { arena: ArenaType };
+type Props = {
+  arena: ArenaType;
+  /** Optional sport id — picks the right equipment + motion path. Falls back
+   *  to a generic dot + the arena-default path when unset. */
+  sportId?: string;
+};
 
-export function Ball({ arena }: Props) {
-  const path = ballPath(arena);
-  const duration = ballDuration(arena);
-
-  // Board games (chess) get no animated ball.
+export function Ball({ arena, sportId }: Props) {
+  // Board games (chess) don't have continuously-moving equipment.
   if (arena === 'board') return null;
+
+  const path = equipmentPath(sportId, arena);
+  const duration = equipmentDuration(sportId, arena);
+  const spec = equipmentFor(sportId);
 
   const xs = path.map((p) => `${p.x}%`);
   const ys = path.map((p) => `${p.y}%`);
 
   return (
     <motion.div
-      className="absolute z-10"
-      style={{
-        width: 12,
-        height: 12,
-        marginLeft: -6,
-        marginTop: -6,
-        background: 'var(--ink)',
-        borderRadius: 999,
-        boxShadow: '0 0 8px color-mix(in oklab, var(--ink) 70%, transparent)',
+      className="pointer-events-none absolute z-10"
+      style={equipmentWrapperStyle(spec)}
+      animate={{
+        left: xs,
+        top: ys,
+        ...(spec.spin ? { rotate: [0, 360] } : {}),
       }}
-      animate={{ left: xs, top: ys }}
       transition={{
         duration,
         repeat: Infinity,
         ease: 'easeInOut',
       }}
-    />
+    >
+      {spec.svg}
+    </motion.div>
   );
 }

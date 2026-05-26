@@ -1,6 +1,20 @@
-export const ARENA_TYPES = ['field', 'court', 'pitch', 'board'] as const;
+export const ARENA_TYPES = [
+  'field', // open multi-player playing area (cricket)
+  'court', // rectangular ruled court with a net (badminton, pickleball)
+  'pitch', // football-style pitch with goal areas
+  'board', // chess-style board game
+  'table', // small surface with a net or felt (table tennis, pool)
+  'rope', // tug-of-war rope between two teams
+  'track', // straight-line / oval running track (relay)
+] as const;
 export type ArenaType = (typeof ARENA_TYPES)[number];
 
+/**
+ * Recommended fixed vocabulary of trackable events the referee console knows
+ * how to render out of the box. New sports MAY use custom event names beyond
+ * this list (e.g. `run-4`, `frame-start`) — the referee UI will fall back to
+ * a generic button for any unrecognised event.
+ */
 export const TRACKABLE_EVENT_VOCAB = [
   'goal',
   'run',
@@ -22,11 +36,35 @@ export const TRACKABLE_EVENT_VOCAB = [
   'resign',
   'timeout',
 ] as const;
-export type TrackableEvent = (typeof TRACKABLE_EVENT_VOCAB)[number];
+
+/** A trackable event is any string — the standard list above is the
+ *  recommended palette but per-sport custom events are allowed. */
+export type TrackableEvent = string;
 
 export type Confidence = 'high' | 'low' | 'missing';
 
+export const SPORT_CATEGORIES = ['team', 'racquet', 'cue-sport'] as const;
+export type SportCategory = (typeof SPORT_CATEGORIES)[number];
+
+/** Gender requirements on the field. All fields optional. */
+export type GenderRequirement = {
+  mandatoryMales?: number;
+  mandatoryFemales?: number;
+  notes?: string;
+};
+
+/**
+ * Full sport definition. The original 4-field shape (name, playersOnField,
+ * substitutes, duration, format, points, trackableEvents, arenaType) is still
+ * here at the top — everything new is optional, so existing data + the simple
+ * "manual sport add" flow keep working.
+ *
+ * The richer fields (scoringRules, bowlingRules, etc.) are populated by the
+ * AI rulebook parser and by the "Import 16 standard sports" seed action.
+ * Admins can override anything in the SportsTab editor.
+ */
 export type SportDoc = {
+  // ── Core ────────────────────────────────────────────────────────────
   name: string;
   arenaType: ArenaType;
   playersOnField: number;
@@ -35,6 +73,41 @@ export type SportDoc = {
   format: string;
   points: { win: number; draw: number; loss: number };
   trackableEvents: TrackableEvent[];
+
+  // ── Categorisation ──────────────────────────────────────────────────
+  /** Broad bucket — drives any grouped views (e.g. "all racquet sports"). */
+  category?: SportCategory;
+  /** Display group for variants — e.g. Badminton Mixed Doubles, Men's Doubles,
+   *  etc. all share parentCategory: "Badminton". */
+  parentCategory?: string;
+
+  // ── Squad shape ─────────────────────────────────────────────────────
+  /** Total players each team must register (subs included). Falls back to
+   *  playersOnField + substitutes when not specified. */
+  playersToRegister?: number;
+  substitutionRules?: string;
+  genderRequirement?: GenderRequirement | null;
+
+  // ── Schedule / format extras ────────────────────────────────────────
+  overSchedule?: string;
+  officials?: string;
+
+  // ── Rule lists (free-form, displayed as bullet lists) ───────────────
+  scoringRules?: string[];
+  bowlingRules?: string[];
+  fieldingRules?: string[];
+  gameplayRules?: string[];
+  faultsList?: string[];
+  tieBreakerRules?: string[];
+  houseRules?: string;
+
+  // ── Live-match state shape (used by the referee console reducer) ────
+  /** Match-state keys this sport tracks. Lets the referee console show only
+   *  the relevant counters and lets the reducer ignore irrelevant fields. */
+  stateFields?: string[];
+
+  // ── Provenance ──────────────────────────────────────────────────────
+  /** Per-field AI confidence after a rulebook parse. */
   aiConfidence?: Record<string, Confidence>;
 };
 

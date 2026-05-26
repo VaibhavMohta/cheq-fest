@@ -1,240 +1,104 @@
-import { useMemo } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { doc, getDocs, setDoc } from 'firebase/firestore';
+import { getDocs, setDoc, Timestamp } from 'firebase/firestore';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import clsx from 'clsx';
 import { Avatar } from '@/components/shared/Avatar';
-import {
-  stagedPlayersCol,
-  teamRef,
-  teamsCol,
-  usersCol,
-} from '@/lib/db';
-import { TEAM_COLOR_VAR, TEAM_IDS, TEAM_LABEL, type TeamId } from '@/types/team';
+import { Button } from '@/components/shared/Button';
+import { teamRef, teamsCol } from '@/lib/db';
+import { storage } from '@/lib/firebase';
+import { COLOR_SLOTS, colorVarFor, flagInitials, type ColorSlot } from '@/types/team';
+import { suggestTeamColor, type ColorSuggestion } from '@/lib/suggestTeamColor';
 import type { TeamDoc } from '@/types/player';
+import { FormField, TextInput } from './FormField';
+import { RequireEvent } from './RequireEvent';
+import { TeamDetail } from './TeamDetail';
 
-const TEAMS_QK = ['admin', 'teams'] as const;
-const STAGED_QK = ['admin', 'stagedPlayers'] as const;
-const CLAIMED_QK = ['admin', 'claimedPlayers'] as const;
+const teamsQk = (eventId: string) => ['admin', 'teams', eventId] as const;
 
 export function TeamsTab() {
+  return <RequireEvent>{(_event, eventId) => <TeamsTabInner eventId={eventId} />}</RequireEvent>;
+}
+
+type TeamWithId = TeamDoc & { id: string };
+
+function TeamsTabInner({ eventId }: { eventId: string }) {
   const qc = useQueryClient();
+  const [openTeamId, setOpenTeamId] = useState<string | null>(null);
 
   const teams = useQuery({
-    queryKey: TEAMS_QK,
-    queryFn: async () => {
-      const snap = await getDocs(teamsCol);
-      const map = new Map<TeamId, TeamDoc & { id: TeamId }>();
-      for (const d of snap.docs) {
-        const id = d.id as TeamId;
-        if (TEAM_IDS.includes(id)) map.set(id, { id, ...d.data() });
-      }
-      return map;
-    },
-  });
-
-  const staged = useQuery({
-    queryKey: STAGED_QK,
-    queryFn: async () => {
-      const snap = await getDocs(stagedPlayersCol);
+    queryKey: teamsQk(eventId),
+    queryFn: async (): Promise<TeamWithId[]> => {
+      const snap = await getDocs(teamsCol(eventId));
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     },
   });
 
-  const claimed = useQuery({
-    queryKey: CLAIMED_QK,
-    queryFn: async () => {
-      const snap = await getDocs(usersCol);
-      return snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+  const create = useMutation({
+    mutationFn: async (args: {
+      name: string;
+      color: ColorSlot;
+      jerseyUrl: string | null;
+    }) => {
+      const id = slugify(args.name);
+      if (!id) throw new Error('Empty team name.');
+      const existing = teams.data?.some((t) => t.id === id);
+      if (existing) throw new Error(`Team "${args.name}" already exists.`);
+      await setDoc(teamRef(eventId, id), {
+        name: args.name.trim(),
+        color: args.color,
+        logoUrl: null,
+        jerseyUrl: args.jerseyUrl,
+        members: [],
+        groupCaptainEmail: null,
+        viceCaptainEmail: null,
+        totalPoints: 0,
+        createdAt: Timestamp.now(),
+      });
+      return id;
+    },
+    onSuccess: (newId) => {
+      void qc.invalidateQueries({ queryKey: teamsQk(eventId) });
+      setOpenTeamId(newId);
     },
   });
 
-  const createTeam = useMutation({
-    mutationFn: async (teamId: TeamId) => {
-      await setDoc(
-        teamRef(teamId),
-        {
-          name: TEAM_LABEL[teamId],
-          color: teamId,
-          logoUrl: null,
-          members: [],
-          groupCaptainUid: null,
-          viceCaptainUid: null,
-          totalPoints: 0,
-        },
-        { merge: true },
-      );
-    },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: TEAMS_QK }),
-  });
-
-  const setGroupCaptain = useMutation({
-    mutationFn: async (args: { teamId: TeamId; uid: string | null }) => {
-      await setDoc(teamRef(args.teamId), { groupCaptainUid: args.uid }, { merge: true });
-    },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: TEAMS_QK }),
-  });
-
-  const assignStagedToTeam = useMutation({
-    mutationFn: async (args: { stagedId: string; teamId: TeamId | null }) => {
-      await setDoc(
-        doc(stagedPlayersCol, args.stagedId),
-        { teamId: args.teamId },
-        { merge: true },
-      );
-    },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: STAGED_QK }),
-  });
-
-  const assignClaimedToTeam = useMutation({
-    mutationFn: async (args: { uid: string; teamId: TeamId | null }) => {
-      await setDoc(doc(usersCol, args.uid), { teamId: args.teamId }, { merge: true });
-    },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: CLAIMED_QK }),
-  });
-
-  // All players (staged + claimed), grouped by current teamId.
-  type RosterEntry =
-    | { kind: 'staged'; id: string; email: string; name: string; teamId: TeamId | null }
-    | { kind: 'claimed'; uid: string; email: string; name: string; teamId: TeamId | null };
-
-  const allPlayers = useMemo<RosterEntry[]>(() => {
-    const claimedRows: RosterEntry[] = (claimed.data ?? []).map((u) => ({
-      kind: 'claimed',
-      uid: u.uid,
-      email: u.email,
-      name: u.displayName ?? u.email.split('@')[0]!,
-      teamId: u.teamId ?? null,
-    }));
-    const stagedRows: RosterEntry[] = (staged.data ?? []).map((s) => ({
-      kind: 'staged',
-      id: s.id,
-      email: s.email,
-      name: s.displayName,
-      teamId: s.teamId ?? null,
-    }));
-    return [...claimedRows, ...stagedRows];
-  }, [claimed.data, staged.data]);
-
-  if (teams.isLoading || staged.isLoading || claimed.isLoading) {
+  if (teams.isLoading) {
     return <p className="px-5 text-ink-dim">Loading teams…</p>;
   }
 
-  const teamCount = teams.data?.size ?? 0;
+  if (openTeamId) {
+    return (
+      <TeamDetail
+        eventId={eventId}
+        teamId={openTeamId}
+        onClose={() => setOpenTeamId(null)}
+      />
+    );
+  }
 
   return (
     <div className="mx-5 flex flex-col gap-5">
-      <section className="flex flex-col gap-3">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
-          Teams ({teamCount} / 4)
-        </h2>
-        <div className="grid grid-cols-2 gap-2">
-          {TEAM_IDS.map((teamId) => {
-            const team = teams.data?.get(teamId);
-            return (
-              <TeamCard
-                key={teamId}
-                teamId={teamId}
-                team={team ?? null}
-                onCreate={() => createTeam.mutate(teamId)}
-                creating={createTeam.isPending && createTeam.variables === teamId}
-              />
-            );
-          })}
-        </div>
-      </section>
+      <CreateTeamForm
+        eventId={eventId}
+        onCreate={(args) => create.mutate(args)}
+        pending={create.isPending}
+        error={create.error instanceof Error ? create.error.message : null}
+        existingColors={(teams.data ?? []).map((t) => t.color)}
+      />
 
-      {teamCount > 0 && (
-        <section className="flex flex-col gap-3">
-          <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
-            Group Captains
-          </h2>
-          {TEAM_IDS.filter((id) => teams.data?.has(id)).map((teamId) => {
-            const team = teams.data!.get(teamId)!;
-            const currentUid = team.groupCaptainUid;
-            const members = allPlayers.filter((p) => p.teamId === teamId);
-            const current = members.find((p) =>
-              p.kind === 'claimed' ? p.uid === currentUid : false,
-            );
-            return (
-              <div key={teamId} className="rounded-2xl border border-line bg-bg-card p-3">
-                <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
-                  {TEAM_LABEL[teamId]} · {members.length} member{members.length === 1 ? '' : 's'}
-                </p>
-                {members.length === 0 ? (
-                  <p className="mt-1 text-xs text-ink-mute">
-                    Assign players to this team first (below).
-                  </p>
-                ) : (
-                  <select
-                    value={current && current.kind === 'claimed' ? current.uid : ''}
-                    onChange={(e) =>
-                      setGroupCaptain.mutate({ teamId, uid: e.target.value || null })
-                    }
-                    className="mt-2 w-full rounded-xl border border-line bg-bg px-3 py-2 text-sm focus:border-accent focus:outline-none"
-                  >
-                    <option value="">— No Group Captain —</option>
-                    {members
-                      .filter((m): m is Extract<RosterEntry, { kind: 'claimed' }> => m.kind === 'claimed')
-                      .map((m) => (
-                        <option key={m.uid} value={m.uid}>
-                          {m.name}
-                        </option>
-                      ))}
-                  </select>
-                )}
-                {members.filter((m) => m.kind === 'staged').length > 0 && (
-                  <p className="mt-1 font-mono text-[10px] tracking-[0.06em] text-ink-mute">
-                    Staged members can be made captain only after they sign in.
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </section>
-      )}
-
-      <section className="flex flex-col gap-3">
+      <section className="flex flex-col gap-2">
         <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
-          Assign Players
+          {(teams.data ?? []).length} team{(teams.data ?? []).length === 1 ? '' : 's'}
         </h2>
-        {allPlayers.length === 0 ? (
+        {(teams.data ?? []).length === 0 ? (
           <p className="rounded-xl border border-dashed border-line px-4 py-6 text-center font-mono text-[11px] uppercase tracking-[0.08em] text-ink-mute">
-            Import players in the Players tab first.
+            No teams yet · add one above
           </p>
         ) : (
-          <div className="flex flex-col gap-1.5">
-            {allPlayers.map((p) => (
-              <div
-                key={p.kind === 'staged' ? `s-${p.id}` : `c-${p.uid}`}
-                className="flex items-center gap-3 rounded-xl border border-line bg-bg-card px-3 py-2.5"
-              >
-                <Avatar name={p.name} teamId={p.teamId ?? undefined} size={36} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold">{p.name}</p>
-                  <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
-                    {p.email}
-                  </p>
-                </div>
-                <select
-                  value={p.teamId ?? ''}
-                  onChange={(e) => {
-                    const next = (e.target.value || null) as TeamId | null;
-                    if (next && !teams.data?.has(next)) return;
-                    if (p.kind === 'staged') {
-                      assignStagedToTeam.mutate({ stagedId: p.id, teamId: next });
-                    } else {
-                      assignClaimedToTeam.mutate({ uid: p.uid, teamId: next });
-                    }
-                  }}
-                  className="rounded-lg border border-line bg-bg px-2 py-1.5 font-mono text-[11px] uppercase focus:border-accent focus:outline-none"
-                >
-                  <option value="">No team</option>
-                  {TEAM_IDS.filter((id) => teams.data?.has(id)).map((id) => (
-                    <option key={id} value={id}>
-                      {TEAM_LABEL[id]}
-                    </option>
-                  ))}
-                </select>
-              </div>
+          <div className="grid grid-cols-2 gap-2">
+            {teams.data!.map((t) => (
+              <TeamCard key={t.id} team={t} onOpen={() => setOpenTeamId(t.id)} />
             ))}
           </div>
         )}
@@ -243,55 +107,322 @@ export function TeamsTab() {
   );
 }
 
-function TeamCard({
-  teamId,
-  team,
+function CreateTeamForm({
+  eventId,
   onCreate,
-  creating,
+  pending,
+  error,
+  existingColors,
 }: {
-  teamId: TeamId;
-  team: TeamDoc | null;
-  onCreate: () => void;
-  creating: boolean;
+  eventId: string;
+  onCreate: (args: { name: string; color: ColorSlot; jerseyUrl: string | null }) => void;
+  pending: boolean;
+  error: string | null;
+  existingColors: ColorSlot[];
 }) {
-  const color = TEAM_COLOR_VAR[teamId];
-  if (team) {
-    return (
-      <div
-        className="rounded-2xl border p-3"
-        style={{ borderColor: 'color-mix(in oklab, currentColor 40%, transparent)', color }}
+  const [name, setName] = useState('');
+  const [jerseyUrl, setJerseyUrl] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<ColorSuggestion[] | null>(null);
+  const [picked, setPicked] = useState<ColorSlot | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const analyze = useMutation({
+    // Accept the path as an argument so we can kick this off from
+    // uploadJersey.onSuccess without waiting for jerseyPath state to settle.
+    mutationFn: async (storagePath: string) => {
+      return suggestTeamColor({ storagePath, excludeColors: existingColors });
+    },
+    onSuccess: (result) => {
+      setSuggestions(result);
+      // Auto-pick the top suggestion so the Create button activates
+      // immediately if the admin trusts the AI.
+      if (!picked) setPicked(result[0]?.color ?? null);
+    },
+  });
+
+  const uploadJersey = useMutation({
+    mutationFn: async (file: File) => {
+      const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase();
+      const path = `events/${eventId}/jersey-temp/${Date.now()}.${ext}`;
+      const r = storageRef(storage, path);
+      await uploadBytes(r, file, { contentType: file.type || 'image/jpeg' });
+      const url = await getDownloadURL(r);
+      return { path, url };
+    },
+    onSuccess: (result) => {
+      setJerseyUrl(result.url);
+      setSuggestions(null);
+      setPicked(null);
+      // Kick off analysis immediately — no separate button press.
+      analyze.mutate(result.path);
+    },
+  });
+
+  const nameValid = name.trim().length > 0;
+  const allColorsTaken = existingColors.length >= 4;
+
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
+        Create team
+      </h2>
+
+      {allColorsTaken && (
+        <p className="rounded-xl border border-accent/40 bg-accent/10 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.06em] text-accent">
+          All 4 color slots are taken — delete a team before adding another.
+        </p>
+      )}
+
+      <FormField label="Team name" hint="Step 1 of 3">
+        <TextInput
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            // Invalidate suggestions if name changes after analysis.
+            if (suggestions) {
+              setSuggestions(null);
+              setPicked(null);
+            }
+          }}
+          placeholder="Tridents"
+          maxLength={32}
+        />
+      </FormField>
+
+      {nameValid && (
+        <FormField
+          label="Jersey photo"
+          hint="Step 2 of 3 · The AI looks at this to recommend a brand color."
+        >
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-line bg-bg-card/40 px-3 py-3">
+            <span className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-lg border border-line bg-bg">
+              {jerseyUrl ? (
+                <img src={jerseyUrl} alt="" className="h-full w-full object-cover" />
+              ) : uploadJersey.isPending ? (
+                <span className="font-mono text-[10px] text-ink-mute">…</span>
+              ) : (
+                <span className="font-display text-2xl text-ink-mute">+</span>
+              )}
+            </span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
+              {uploadJersey.isPending
+                ? 'Uploading…'
+                : analyze.isPending
+                  ? 'Analyzing colors…'
+                  : jerseyUrl
+                    ? 'Tap to replace · re-analyze'
+                    : 'Tap to upload jersey'}
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadJersey.mutate(f);
+                e.target.value = '';
+              }}
+              disabled={uploadJersey.isPending || pending || allColorsTaken}
+            />
+          </label>
+        </FormField>
+      )}
+
+      {analyze.error && (
+        <p className="font-mono text-[10px] text-accent">
+          AI analysis failed:{' '}
+          {analyze.error instanceof Error ? analyze.error.message : String(analyze.error)}
+          {' · You can still pick a color manually below.'}
+        </p>
+      )}
+
+      {jerseyUrl && (
+        <FormField
+          label="Pick color"
+          hint="Step 3 of 3 · AI suggestions appear at top once analysis finishes."
+        >
+          <div className="flex flex-col gap-2">
+            {/* AI suggestions (cards with rationale) */}
+            {analyze.isPending && (
+              <p className="rounded-xl border border-dashed border-accent-2/40 bg-accent-2/5 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.06em] text-accent-2">
+                ✨ Analyzing jersey colors with AI…
+              </p>
+            )}
+            {suggestions && suggestions.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                {suggestions.map((s, idx) => {
+                  const isPicked = picked === s.color;
+                  return (
+                    <button
+                      key={s.color}
+                      type="button"
+                      onClick={() => setPicked(s.color)}
+                      className="flex items-center gap-3 rounded-xl border bg-bg-card px-3 py-2 text-left transition active:scale-[0.99]"
+                      style={{
+                        borderColor: isPicked ? colorVarFor(s.color) : 'var(--line)',
+                        boxShadow: isPicked ? `inset 0 0 0 1px ${colorVarFor(s.color)}` : undefined,
+                      }}
+                    >
+                      <span
+                        aria-hidden
+                        className="grid h-9 w-9 shrink-0 place-items-center rounded-full font-display text-[10px] text-bg"
+                        style={{ background: colorVarFor(s.color) }}
+                      >
+                        {idx + 1}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-1.5">
+                          <span className="font-display text-sm uppercase tracking-[0.06em]">
+                            {humanColorName(s.color)}
+                          </span>
+                          <span className="rounded-md border border-accent-2/40 bg-accent-2/10 px-1 py-0.5 font-mono text-[8px] uppercase tracking-[0.06em] text-accent-2">
+                            AI {idx + 1}
+                          </span>
+                        </span>
+                        <span className="mt-0.5 block font-mono text-[10px] tracking-[0.04em] text-ink-dim">
+                          {s.rationale}
+                        </span>
+                      </span>
+                      {isPicked && (
+                        <span
+                          className="font-mono text-[10px] font-bold"
+                          style={{ color: colorVarFor(s.color) }}
+                        >
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Static all-colors row — taken colors greyed out + disabled */}
+            <div className="mt-1">
+              <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-mute">
+                Or pick any
+              </p>
+              <div className="flex gap-2">
+                {COLOR_SLOTS.map((c) => {
+                  const taken = existingColors.includes(c);
+                  const isPicked = picked === c;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      disabled={taken}
+                      onClick={() => !taken && setPicked(c)}
+                      aria-label={`${humanColorName(c)}${taken ? ' (taken)' : ''}`}
+                      title={taken ? `${humanColorName(c)} — already used` : humanColorName(c)}
+                      className={clsx(
+                        'grid h-11 w-11 place-items-center rounded-full transition',
+                        taken ? 'cursor-not-allowed' : 'active:scale-[0.96]',
+                      )}
+                      style={{
+                        background: colorVarFor(c),
+                        opacity: taken ? 0.25 : 1,
+                        filter: taken ? 'grayscale(0.6)' : undefined,
+                        boxShadow: isPicked
+                          ? `0 0 0 2px var(--ink), 0 0 0 4px ${colorVarFor(c)}`
+                          : undefined,
+                      }}
+                    >
+                      {taken ? (
+                        <span className="font-mono text-[10px] font-bold text-bg">×</span>
+                      ) : isPicked ? (
+                        <span className="font-mono text-[10px] font-bold text-bg">✓</span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </FormField>
+      )}
+
+      {(error || localError) && (
+        <p className="font-mono text-[10px] text-accent">{error ?? localError}</p>
+      )}
+
+      <Button
+        type="button"
+        disabled={pending || !nameValid || !picked || allColorsTaken}
+        onClick={() => {
+          if (!nameValid) {
+            setLocalError('Enter a team name.');
+            return;
+          }
+          if (!picked) {
+            setLocalError('Upload a jersey + analyze, then pick a color.');
+            return;
+          }
+          setLocalError(null);
+          onCreate({ name: name.trim(), color: picked, jerseyUrl });
+          // Reset wizard.
+          setName('');
+          setJerseyUrl(null);
+          setSuggestions(null);
+          setPicked(null);
+        }}
       >
-        <p
+        {pending ? 'Creating…' : picked ? `Create ${name.trim() || 'team'} (${humanColorName(picked)})` : 'Create team'}
+      </Button>
+    </section>
+  );
+}
+
+function humanColorName(slot: ColorSlot): string {
+  switch (slot) {
+    case 'accent':
+      return 'Lava';
+    case 'accent-2':
+      return 'Lime';
+    case 'accent-3':
+      return 'Cyan';
+    case 'accent-4':
+      return 'Pink';
+  }
+}
+
+function TeamCard({ team, onOpen }: { team: TeamWithId; onOpen: () => void }) {
+  const color = colorVarFor(team.color);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex flex-col items-start gap-1 rounded-2xl border p-3 text-left transition active:scale-[0.98]"
+      style={{ borderColor: 'color-mix(in oklab, currentColor 40%, transparent)', color }}
+    >
+      {team.logoUrl ? (
+        <Avatar
+          name={team.name}
+          adminPhotoUrl={team.logoUrl}
+          size={40}
+          surfaceColor="var(--bg-card)"
+        />
+      ) : (
+        <span
           aria-hidden
           className="grid h-10 w-10 place-items-center rounded-full font-display text-sm text-bg"
           style={{ background: color }}
         >
-          {TEAM_LABEL[teamId].slice(0, 2).toUpperCase()}
-        </p>
-        <p className="mt-2 font-display text-base uppercase">{TEAM_LABEL[teamId]}</p>
-        <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.06em] opacity-70">
-          {team.members.length} player{team.members.length === 1 ? '' : 's'}
-        </p>
-      </div>
-    );
-  }
-  return (
-    <button
-      type="button"
-      onClick={onCreate}
-      disabled={creating}
-      className="flex flex-col items-start gap-1 rounded-2xl border border-dashed border-line bg-bg-card/40 p-3 text-left transition active:scale-[0.98]"
-    >
-      <span
-        aria-hidden
-        className="grid h-10 w-10 place-items-center rounded-full border border-dashed font-display text-sm text-ink-mute"
-      >
-        +
-      </span>
-      <span className="mt-2 font-display text-base uppercase">{TEAM_LABEL[teamId]}</span>
-      <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-mute">
-        {creating ? 'Creating…' : 'Tap to create'}
+          {flagInitials(team.name)}
+        </span>
+      )}
+      <span className="mt-1 font-display text-base uppercase text-ink">{team.name}</span>
+      <span className="font-mono text-[10px] uppercase tracking-[0.06em] opacity-70">
+        {team.members.length} player{team.members.length === 1 ? '' : 's'}
+        {team.groupCaptainEmail ? ' · GC ✓' : ' · No GC'}
       </span>
     </button>
   );
+}
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
 }

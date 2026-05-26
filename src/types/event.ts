@@ -15,10 +15,9 @@ export type EventDoc = {
   rulebookText: string | null;
   rulebookParsedAt: Timestamp | null;
   refereePool: string[];
+  /** Server-stamped on initial create. Used for newest-first ordering. */
+  createdAt: Timestamp | null;
 };
-
-/** Single active event for V1 (multi-event archive is out of scope). */
-export const CURRENT_EVENT_ID = 'current';
 
 export function defaultEvent(year: number): EventDoc {
   return {
@@ -33,5 +32,6 @@ export function defaultEvent(year: number): EventDoc {
     rulebookText: null,
     rulebookParsedAt: null,
     refereePool: [],
+    createdAt: null,
   };
 }

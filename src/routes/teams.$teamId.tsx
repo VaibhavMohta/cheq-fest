@@ -4,7 +4,7 @@ import { SectionTitle } from '@/components/shared/SectionTitle';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { IconButton } from '@/components/shared/IconButton';
 import { BackIcon } from '@/components/shared/icons';
-import { TEAM_COLOR_VAR, TEAM_IDS, TEAM_LABEL, type TeamId } from '@/types/team';
+import { TEAM_IDS, colorVarFor, teamLabelFor, type TeamId } from '@/types/team';
 
 export const Route = createFileRoute('/teams/$teamId')({
   parseParams: ({ teamId }) => {
@@ -22,8 +22,8 @@ function isTeamId(value: string): value is TeamId {
 function TeamDetailScreen() {
   const { teamId } = Route.useParams();
   const router = useRouter();
-  const teamColor = TEAM_COLOR_VAR[teamId];
-  const teamLabel = TEAM_LABEL[teamId];
+  const teamColor = colorVarFor(teamId);
+  const teamLabel = teamLabelFor(teamId);
 
   return (
     <>

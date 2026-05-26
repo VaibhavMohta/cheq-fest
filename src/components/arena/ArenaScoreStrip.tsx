@@ -1,5 +1,5 @@
 import { Chip } from '@/components/shared/Chip';
-import { TEAM_COLOR_VAR, TEAM_LABEL, type TeamId } from '@/types/team';
+import { colorVarFor, teamLabelFor, type TeamId } from '@/types/team';
 
 type Props = {
   teamA: TeamId;
@@ -45,7 +45,7 @@ function TeamBlock({
     >
       {!alignRight && <Flag teamId={teamId} />}
       <div className="flex flex-col" style={{ alignItems: alignRight ? 'flex-end' : 'flex-start' }}>
-        <span className="font-display text-xs uppercase tracking-[0.08em]">{TEAM_LABEL[teamId]}</span>
+        <span className="font-display text-xs uppercase tracking-[0.08em]">{teamLabelFor(teamId)}</span>
         <span className="font-display text-3xl leading-none tabular-nums">{score}</span>
       </div>
       {alignRight && <Flag teamId={teamId} />}
@@ -58,9 +58,9 @@ function Flag({ teamId }: { teamId: TeamId }) {
     <span
       aria-hidden
       className="grid h-10 w-10 place-items-center rounded-full font-display text-sm text-bg"
-      style={{ background: TEAM_COLOR_VAR[teamId] }}
+      style={{ background: colorVarFor(teamId) }}
     >
-      {TEAM_LABEL[teamId].slice(0, 2).toUpperCase()}
+      {teamLabelFor(teamId).slice(0, 2).toUpperCase()}
     </span>
   );
 }

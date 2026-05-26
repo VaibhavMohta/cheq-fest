@@ -7,7 +7,7 @@ import {
   type FirestoreDataConverter,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { CURRENT_EVENT_ID, type EventDoc } from '@/types/event';
+import type { EventDoc } from '@/types/event';
 import type { SportDoc } from '@/types/sport';
 import type { MatchDoc, RefereeEventDoc } from '@/types/match';
 import type { AiUsageDoc } from '@/types/ai';
@@ -24,66 +24,67 @@ function converter<T extends DocumentData>(): FirestoreDataConverter<T> {
   };
 }
 
-export const eventRef: DocumentReference<EventDoc> = doc(
-  db,
-  'events',
-  CURRENT_EVENT_ID,
-).withConverter(converter<EventDoc>());
+// ─── Top-level (event-independent) collections ───────────────────────────
 
-export const teamsCol: CollectionReference<TeamDoc> = collection(
-  db,
-  'events',
-  CURRENT_EVENT_ID,
-  'teams',
-).withConverter(converter<TeamDoc>());
+export const eventsCol: CollectionReference<EventDoc> = collection(db, 'events').withConverter(
+  converter<EventDoc>(),
+);
 
-export const teamRef = (teamId: TeamId): DocumentReference<TeamDoc> =>
-  doc(teamsCol, teamId);
-
-export const sportsCol: CollectionReference<SportDoc> = collection(
-  db,
-  'events',
-  CURRENT_EVENT_ID,
-  'sports',
-).withConverter(converter<SportDoc>());
-
-export const sportRef = (sportId: string): DocumentReference<SportDoc> =>
-  doc(sportsCol, sportId);
+export const eventRef = (eventId: string): DocumentReference<EventDoc> => doc(eventsCol, eventId);
 
 export const stagedPlayersCol: CollectionReference<StagedPlayerDoc> = collection(
   db,
   'stagedPlayers',
 ).withConverter(converter<StagedPlayerDoc>());
 
-export const matchesCol: CollectionReference<MatchDoc> = collection(
-  db,
-  'events',
-  CURRENT_EVENT_ID,
-  'matches',
-).withConverter(converter<MatchDoc>());
-
-export const matchRef = (matchId: string): DocumentReference<MatchDoc> =>
-  doc(matchesCol, matchId);
-
-export const refereeEventsCol = (matchId: string): CollectionReference<RefereeEventDoc> =>
-  collection(
-    db,
-    'events',
-    CURRENT_EVENT_ID,
-    'matches',
-    matchId,
-    'refereeEvents',
-  ).withConverter(converter<RefereeEventDoc>());
-
 export const usersCol: CollectionReference<UserDoc> = collection(db, 'users').withConverter(
   converter<UserDoc>(),
 );
+
+export const userRef = (uid: string): DocumentReference<UserDoc> => doc(usersCol, uid);
 
 export const aiUsageCol: CollectionReference<AiUsageDoc> = collection(db, 'aiUsage').withConverter(
   converter<AiUsageDoc>(),
 );
 
-export const userRef = (uid: string): DocumentReference<UserDoc> => doc(usersCol, uid);
+// ─── Event-scoped subcollections ─────────────────────────────────────────
+// All factories take the active eventId. Callers get the activeEventId from
+// `useActiveEvent()` in lib/activeEvent.ts and pass it in. This is a
+// deliberate choice over a global "current event" — every read/write is
+// explicit about which event it belongs to.
+
+export const teamsCol = (eventId: string): CollectionReference<TeamDoc> =>
+  collection(db, 'events', eventId, 'teams').withConverter(converter<TeamDoc>());
+
+export const teamRef = (eventId: string, teamId: TeamId): DocumentReference<TeamDoc> =>
+  doc(teamsCol(eventId), teamId);
+
+export const sportsCol = (eventId: string): CollectionReference<SportDoc> =>
+  collection(db, 'events', eventId, 'sports').withConverter(converter<SportDoc>());
+
+export const sportRef = (eventId: string, sportId: string): DocumentReference<SportDoc> =>
+  doc(sportsCol(eventId), sportId);
+
+export const matchesCol = (eventId: string): CollectionReference<MatchDoc> =>
+  collection(db, 'events', eventId, 'matches').withConverter(converter<MatchDoc>());
+
+export const matchRef = (eventId: string, matchId: string): DocumentReference<MatchDoc> =>
+  doc(matchesCol(eventId), matchId);
+
+export const refereeEventsCol = (
+  eventId: string,
+  matchId: string,
+): CollectionReference<RefereeEventDoc> =>
+  collection(
+    db,
+    'events',
+    eventId,
+    'matches',
+    matchId,
+    'refereeEvents',
+  ).withConverter(converter<RefereeEventDoc>());
+
+// ─── Helpers ─────────────────────────────────────────────────────────────
 
 /** Lowercase + trim — used for de-duping CSV imports and lookups. */
 export function normalizeEmail(email: string): string {

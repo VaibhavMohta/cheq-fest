@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import clsx from 'clsx';
 import { TopBar } from '@/components/shared/TopBar';
+import { EventBar } from '@/components/shared/EventBar';
 import { Field } from '@/components/arena/Field';
 import { ArenaPlayer, ArenaEmptySlot } from '@/components/arena/ArenaPlayer';
 import { Ball } from '@/components/arena/Ball';
@@ -27,8 +28,8 @@ type DemoMatch = {
 const DEMO_MATCHES: DemoMatch[] = [
   {
     id: 'football',
-    label: 'Football · 5-a-side',
-    arena: 'field',
+    label: 'Football · 4-a-side',
+    arena: 'pitch',
     scoreA: 2,
     scoreB: 1,
     clock: "12'",
@@ -54,8 +55,8 @@ const DEMO_MATCHES: DemoMatch[] = [
     },
   },
   {
-    id: 'badminton',
-    label: 'Badminton · Doubles',
+    id: 'badminton-mixed-doubles',
+    label: 'Badminton · Mixed Doubles',
     arena: 'court',
     scoreA: 18,
     scoreB: 16,
@@ -77,8 +78,8 @@ const DEMO_MATCHES: DemoMatch[] = [
   },
   {
     id: 'cricket',
-    label: 'Cricket · T10',
-    arena: 'pitch',
+    label: 'Cricket · 7-over',
+    arena: 'field',
     scoreA: 84,
     scoreB: 0,
     clock: '9.4',
@@ -114,6 +115,98 @@ const DEMO_MATCHES: DemoMatch[] = [
     teamA: { teamId: 'blazers', players: [{ name: 'Ayan Roy', isCaptain: true }] },
     teamB: { teamId: 'voltron', players: [{ name: 'Maya Lin', isCaptain: true }] },
   },
+  {
+    id: 'tug-of-war',
+    label: 'Tug of War',
+    arena: 'rope',
+    scoreA: 1,
+    scoreB: 0,
+    clock: 'Pull 2',
+    teamA: {
+      teamId: 'tridents',
+      players: [
+        { name: 'Shah Mehta', isCaptain: true },
+        { name: 'Ravi Bose' },
+        { name: 'Arjun Singh' },
+        { name: 'Kabir Lal' },
+        { name: 'Diya Roy' },
+        { name: 'Mira Iyer' },
+      ],
+    },
+    teamB: {
+      teamId: 'phantoms',
+      players: [
+        { name: 'Nia Verma', isCaptain: true },
+        { name: 'Ira Khanna' },
+        { name: 'Sam Pillai' },
+        { name: 'Vik Patel' },
+        { name: 'Lia Bose' },
+        { name: 'Ash Pai' },
+      ],
+    },
+  },
+  {
+    id: 'relay-race',
+    label: 'Relay Race',
+    arena: 'track',
+    scoreA: 0,
+    scoreB: 0,
+    clock: '00:42',
+    teamA: {
+      teamId: 'blazers',
+      players: [
+        { name: 'Tara Kale', isCaptain: true },
+        { name: 'Aman Joshi' },
+        { name: 'Reha Das' },
+        { name: 'Karan M' },
+        { name: 'Lila Sen' },
+        { name: 'Sid Rao' },
+      ],
+    },
+    teamB: {
+      teamId: 'voltron',
+      players: [
+        { name: 'Maya Lin', isCaptain: true },
+        { name: 'Ayan Roy' },
+        { name: 'Priya N' },
+        { name: 'Devi K' },
+        { name: 'Rohan J' },
+        { name: 'Sana M' },
+      ],
+    },
+  },
+  {
+    id: 'pool-singles',
+    label: 'Pool · Singles',
+    arena: 'table',
+    scoreA: 1,
+    scoreB: 0,
+    clock: 'Frame 2',
+    teamA: { teamId: 'tridents', players: [{ name: 'Ravi Bose', isCaptain: true }] },
+    teamB: { teamId: 'voltron', players: [{ name: 'Ayan Roy', isCaptain: true }] },
+  },
+  {
+    id: 'tt-mens-doubles',
+    label: 'Table Tennis · Men’s Doubles',
+    arena: 'table',
+    scoreA: 12,
+    scoreB: 9,
+    clock: 'G1',
+    teamA: {
+      teamId: 'phantoms',
+      players: [
+        { name: 'Sam Pillai', isCaptain: true },
+        { name: 'Vik Patel' },
+      ],
+    },
+    teamB: {
+      teamId: 'blazers',
+      players: [
+        { name: 'Aman Joshi', isCaptain: true },
+        { name: 'Sid Rao' },
+      ],
+    },
+  },
 ];
 
 export default function ArenaScreen() {
@@ -127,6 +220,7 @@ export default function ArenaScreen() {
     <>
       <TopBar title="Live Arena" />
       <main className="mx-auto max-w-[420px] pb-28">
+        <EventBar />
         <div className="mx-5 mb-3 flex gap-1.5 overflow-x-auto">
           {DEMO_MATCHES.map((m, i) => {
             const active = i === matchIdx;
@@ -156,7 +250,7 @@ export default function ArenaScreen() {
           clock={match.clock}
         />
 
-        <Field arena={match.arena}>
+        <Field arena={match.arena} sportId={match.id}>
           {match.teamA.players.map((p, i) => {
             const pos = homeSlots[i];
             if (!pos) return <ArenaEmptySlot key={`a-empty-${i}`} position={{ x: 50, y: 50 }} />;
@@ -167,7 +261,8 @@ export default function ArenaScreen() {
                 name={p.name}
                 teamId={match.teamA.teamId}
                 isCaptain={p.isCaptain}
-                size={match.arena === 'board' ? 64 : 38}
+                size={avatarSizeFor(match.arena, match.teamA.players.length)}
+                compact={shouldCompact(match.arena, match.teamA.players.length)}
                 delaySeed={i}
               />
             );
@@ -182,12 +277,13 @@ export default function ArenaScreen() {
                 name={p.name}
                 teamId={match.teamB.teamId}
                 isCaptain={p.isCaptain}
-                size={match.arena === 'board' ? 64 : 38}
+                size={avatarSizeFor(match.arena, match.teamB.players.length)}
+                compact={shouldCompact(match.arena, match.teamB.players.length)}
                 delaySeed={i + 100}
               />
             );
           })}
-          <Ball arena={match.arena} />
+          <Ball arena={match.arena} sportId={match.id} />
         </Field>
 
         <p className="mx-5 mt-3 text-center font-mono text-[10px] uppercase tracking-[0.08em] text-ink-mute">
@@ -196,4 +292,32 @@ export default function ArenaScreen() {
       </main>
     </>
   );
+}
+
+/**
+ * Avatar size choices balance readability with not eating the arena. Board
+ * games (1 v 1 chess) afford a bigger face. Crowded arenas (cricket 6,
+ * tug-of-war 6, relay 6) shrink slightly so faces don't clip each other.
+ */
+function avatarSizeFor(arena: ArenaType, count: number): number {
+  if (arena === 'board') return 64;
+  if (count >= 6) return 32;
+  return 38;
+}
+
+/**
+ * Compact mode (2-letter initials, smaller label) kicks in when players sit
+ * side-by-side and a full first name would bleed into a neighbour.
+ *
+ *  - table arenas (TT, pool) — players stand close, names overlap easily
+ *  - court arenas with doubles (≥2 per side)
+ *  - rope (tug-of-war) — 6 in a tight row
+ *  - track (relay) — 6 close together along the bend
+ */
+function shouldCompact(arena: ArenaType, count: number): boolean {
+  if (arena === 'table') return true;
+  if (arena === 'rope') return true;
+  if (arena === 'track') return true;
+  if (arena === 'court' && count >= 2) return true;
+  return false;
 }

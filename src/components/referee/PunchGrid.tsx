@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import type { TrackableEvent } from '@/types/sport';
-import { TEAM_COLOR_VAR, TEAM_LABEL, type TeamId } from '@/types/team';
+import { colorVarFor, teamLabelFor, type TeamId } from '@/types/team';
 
 type Side = 'A' | 'B';
 
@@ -83,7 +83,7 @@ export function PunchGrid({ teamA, teamB, trackable, showRunButtons, onPunch, di
                 disabled={disabled}
                 className="rounded-xl border border-line bg-bg px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.06em] text-ink-dim active:scale-[0.96] disabled:opacity-50"
               >
-                {LABEL[t]} · {TEAM_LABEL[side === 'A' ? teamA : teamB].slice(0, 3)}
+                {LABEL[t]} · {teamLabelFor(side === 'A' ? teamA : teamB).slice(0, 3)}
               </button>
             )),
           )}
@@ -114,10 +114,10 @@ function SidePanel({
         <span
           aria-hidden
           className="h-2 w-2 rounded-full"
-          style={{ background: TEAM_COLOR_VAR[teamId] }}
+          style={{ background: colorVarFor(teamId) }}
         />
         <span className="font-display text-[12px] uppercase tracking-[0.06em]">
-          {TEAM_LABEL[teamId]}
+          {teamLabelFor(teamId)}
         </span>
       </div>
       <div className="grid grid-cols-3 gap-1.5">

@@ -9,11 +9,20 @@ import { parseRulebook, type ParsedSport } from '@/lib/parseRulebook';
 import { aiUsageCol, sportRef } from '@/lib/db';
 import { ARENA_TYPES, TRACKABLE_EVENT_VOCAB, type ArenaType, type Confidence, type TrackableEvent } from '@/types/sport';
 import { FormField, TextArea, TextInput } from './FormField';
+import { RequireEvent } from './RequireEvent';
 
-const SPORTS_QK = ['admin', 'sports'] as const;
+const sportsQk = (eventId: string) => ['admin', 'sports', eventId] as const;
 const AI_USAGE_QK = ['admin', 'aiUsage'] as const;
 
 export function RulebookTab() {
+  return (
+    <RequireEvent>
+      {(event, eventId) => <RulebookTabInner eventId={eventId} eventName={event.name} />}
+    </RequireEvent>
+  );
+}
+
+function RulebookTabInner({ eventId, eventName }: { eventId: string; eventName: string }) {
   const qc = useQueryClient();
   const [text, setText] = useState('');
   const [pdf, setPdf] = useState<File | null>(null);
@@ -62,7 +71,7 @@ export function RulebookTab() {
         sports.map((s) => {
           const { confidence: _confidence, ...rest } = s;
           return setDoc(
-            sportRef(slugify(s.name)),
+            sportRef(eventId, slugify(s.name)),
             { ...rest, aiConfidence: s.confidence },
             { merge: true },
           );
@@ -70,7 +79,7 @@ export function RulebookTab() {
       );
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: SPORTS_QK });
+      void qc.invalidateQueries({ queryKey: sportsQk(eventId) });
       setDrafts([]);
       setText('');
       setPdf(null);
@@ -148,7 +157,9 @@ export function RulebookTab() {
             disabled={saveAll.isPending}
             onClick={() => saveAll.mutate(drafts)}
           >
-            {saveAll.isPending ? 'Saving…' : `Confirm ${drafts.length} sport${drafts.length === 1 ? '' : 's'}`}
+            {saveAll.isPending
+              ? 'Saving…'
+              : `Save ${drafts.length} sport${drafts.length === 1 ? '' : 's'} → ${eventName}`}
           </Button>
           {saveAll.error && <ErrorBox detail={String(saveAll.error)} />}
         </section>

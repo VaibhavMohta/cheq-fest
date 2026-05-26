@@ -68,6 +68,8 @@ function computeCostUsd(args: {
 
 // JSON schema — guarantees the response shape via output_config.format.
 // Anything Claude returns will validate against this; no JSON.parse error path.
+const CONFIDENCE_ENUM = { type: 'string', enum: ['high', 'low', 'missing'] } as const;
+
 const RULEBOOK_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -80,33 +82,28 @@ const RULEBOOK_SCHEMA = {
         additionalProperties: false,
         required: [
           'name',
+          'arenaType',
           'playersOnField',
           'substitutes',
           'duration',
           'format',
           'points',
           'trackableEvents',
-          'arenaType',
           'confidence',
         ],
         properties: {
-          name: { type: 'string', description: 'Sport name, e.g. "Football"' },
-          playersOnField: {
-            type: 'integer',
-            description: 'Players per side on the field at one time (>= 1)',
-          },
-          substitutes: {
-            type: 'integer',
-            description: 'Max substitutes per side (>= 0)',
-          },
-          duration: {
+          // ── Core (always required) ──────────────────────────────────
+          name: { type: 'string', description: 'Sport name, e.g. "Cricket" or "Badminton — Mixed Doubles" for a variant.' },
+          arenaType: {
             type: 'string',
-            description: 'Human duration, e.g. "2 × 15 min" or "best of 3 games"',
+            enum: ['field', 'court', 'pitch', 'board', 'table', 'rope', 'track'],
+            description:
+              'field=open multi-player; pitch=football-style; court=badminton/pickleball; table=TT/pool; rope=tug-of-war; track=relay/athletics; board=chess.',
           },
-          format: {
-            type: 'string',
-            description: 'Format string, e.g. "5-a-side · roll subs"',
-          },
+          playersOnField: { type: 'integer', description: 'Players per side at one time.' },
+          substitutes: { type: 'integer', description: 'Max substitutes per side.' },
+          duration: { type: 'string' },
+          format: { type: 'string' },
           points: {
             type: 'object',
             additionalProperties: false,
@@ -119,35 +116,52 @@ const RULEBOOK_SCHEMA = {
           },
           trackableEvents: {
             type: 'array',
-            items: {
-              type: 'string',
-              enum: [
-                'goal',
-                'run',
-                'wicket',
-                'boundary',
-                'six',
-                'wide',
-                'no-ball',
-                'bye',
-                'yellow',
-                'red',
-                'foul',
-                'sub',
-                'let',
-                'fault',
-                'service-change',
-                'move',
-                'draw-offer',
-                'resign',
-                'timeout',
-              ],
+            description:
+              'Per-sport ref-console events. Free-form strings — use standard vocab when it fits (goal, run, wicket, foul, fault, sub, etc.) and custom names like "run-4", "frame-start", "pull-end" when needed.',
+            items: { type: 'string' },
+          },
+
+          // ── Optional richer fields (omit when rulebook is silent) ───
+          category: {
+            type: 'string',
+            enum: ['team', 'racquet', 'cue-sport'],
+            description: 'Broad bucket; omit if unclear.',
+          },
+          parentCategory: {
+            type: 'string',
+            description:
+              'Display group for variants — e.g. "Badminton" for "Badminton — Mixed Doubles". Omit for non-variant sports.',
+          },
+          playersToRegister: {
+            type: 'integer',
+            description: 'Total players to register (incl. subs). Falls back to playersOnField + substitutes.',
+          },
+          substitutionRules: { type: 'string' },
+          genderRequirement: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              mandatoryMales: { type: 'integer' },
+              mandatoryFemales: { type: 'integer' },
+              notes: { type: 'string' },
             },
           },
-          arenaType: {
-            type: 'string',
-            enum: ['field', 'court', 'pitch', 'board'],
+          overSchedule: { type: 'string', description: 'Cricket only, e.g. "2+2+1+1".' },
+          officials: { type: 'string' },
+          scoringRules: { type: 'array', items: { type: 'string' } },
+          bowlingRules: { type: 'array', items: { type: 'string' }, description: 'Cricket only.' },
+          fieldingRules: { type: 'array', items: { type: 'string' }, description: 'Cricket only.' },
+          gameplayRules: { type: 'array', items: { type: 'string' } },
+          faultsList: { type: 'array', items: { type: 'string' } },
+          tieBreakerRules: { type: 'array', items: { type: 'string' } },
+          houseRules: { type: 'string' },
+          stateFields: {
+            type: 'array',
+            description: 'Live-match counters this sport tracks (e.g. ["scoreA","scoreB","overs","balls"]).',
+            items: { type: 'string' },
           },
+
+          // ── Confidence map (covers every field above) ───────────────
           confidence: {
             type: 'object',
             additionalProperties: false,
@@ -161,13 +175,28 @@ const RULEBOOK_SCHEMA = {
               'arenaType',
             ],
             properties: {
-              playersOnField: { type: 'string', enum: ['high', 'low', 'missing'] },
-              substitutes: { type: 'string', enum: ['high', 'low', 'missing'] },
-              duration: { type: 'string', enum: ['high', 'low', 'missing'] },
-              format: { type: 'string', enum: ['high', 'low', 'missing'] },
-              points: { type: 'string', enum: ['high', 'low', 'missing'] },
-              trackableEvents: { type: 'string', enum: ['high', 'low', 'missing'] },
-              arenaType: { type: 'string', enum: ['high', 'low', 'missing'] },
+              playersOnField: CONFIDENCE_ENUM,
+              substitutes: CONFIDENCE_ENUM,
+              duration: CONFIDENCE_ENUM,
+              format: CONFIDENCE_ENUM,
+              points: CONFIDENCE_ENUM,
+              trackableEvents: CONFIDENCE_ENUM,
+              arenaType: CONFIDENCE_ENUM,
+              category: CONFIDENCE_ENUM,
+              parentCategory: CONFIDENCE_ENUM,
+              playersToRegister: CONFIDENCE_ENUM,
+              substitutionRules: CONFIDENCE_ENUM,
+              genderRequirement: CONFIDENCE_ENUM,
+              overSchedule: CONFIDENCE_ENUM,
+              officials: CONFIDENCE_ENUM,
+              scoringRules: CONFIDENCE_ENUM,
+              bowlingRules: CONFIDENCE_ENUM,
+              fieldingRules: CONFIDENCE_ENUM,
+              gameplayRules: CONFIDENCE_ENUM,
+              faultsList: CONFIDENCE_ENUM,
+              tieBreakerRules: CONFIDENCE_ENUM,
+              houseRules: CONFIDENCE_ENUM,
+              stateFields: CONFIDENCE_ENUM,
             },
           },
         },
@@ -178,26 +207,57 @@ const RULEBOOK_SCHEMA = {
 
 const SYSTEM_PROMPT = `You parse company sports-fest rulebooks into structured JSON.
 
-For each sport described in the input, extract:
-  - name (string)
-  - playersOnField (number on each side at one time)
-  - substitutes (max per side; 0 if not mentioned)
-  - duration (free-form string, e.g. "2 × 15 min", "best of 3")
-  - format (free-form string, e.g. "5-a-side · roll subs")
-  - points: { win, draw, loss } — numeric per-match points awarded
-  - trackableEvents: array drawn ONLY from this fixed vocabulary:
-      goal, run, wicket, boundary, six, wide, no-ball, bye, yellow, red,
-      foul, sub, let, fault, service-change, move, draw-offer, resign, timeout
-  - arenaType: one of "field" (football, hockey), "court" (badminton, basketball,
-    squash, tennis), "pitch" (cricket), "board" (chess, carrom)
-  - confidence: per-field confidence: "high" when the rulebook states the value
-    directly, "low" when you inferred it, "missing" when the rulebook is silent
-    (use a sensible default for the value, but mark confidence as "missing" so
-    the admin reviews it)
+The fest has up to 16 sport events. Many are variants of the same parent
+sport (e.g. Badminton has Mixed Doubles, Men's Doubles, Men's Singles,
+Women's Singles — each is a separate sport entry with parentCategory:"Badminton").
 
-Use sensible defaults when fields are missing rather than refusing — but always
-flag confidence accurately. The admin will review every "low" / "missing" field
-before confirming. Never invent sports that aren't in the input.`;
+For each sport described in the input, extract:
+
+  REQUIRED fields:
+    name, arenaType, playersOnField, substitutes, duration, format,
+    points {win, draw, loss}, trackableEvents (array)
+
+  OPTIONAL — include only when the rulebook supports them:
+    category (team | racquet | cue-sport)
+    parentCategory (for variants)
+    playersToRegister  substitutionRules
+    genderRequirement { mandatoryMales?, mandatoryFemales?, notes? }
+    overSchedule  officials
+    scoringRules[]  bowlingRules[]  fieldingRules[]  gameplayRules[]
+    faultsList[]  tieBreakerRules[]  houseRules
+    stateFields[]  — the live-match counters this sport needs
+
+  arenaType vocabulary:
+    field   — cricket-style open playing area
+    pitch   — football pitch with goal box / D
+    court   — racquet sport court (badminton, pickleball, tennis)
+    table   — TT / pool table
+    rope    — tug-of-war
+    track   — relay race / athletics track
+    board   — chess / carrom
+
+  trackableEvents — free-form strings. Prefer standard vocab when it fits
+  (goal, run, wicket, boundary, six, wide, no-ball, bye, yellow, red, foul,
+  sub, let, fault, service-change, move, draw-offer, resign, timeout) but
+  use custom event names like "run-4", "frame-start", "pull-end" when the
+  sport needs them.
+
+  points — if the rulebook is silent on per-match points, default to a
+  sensible spread weighted by the sport's effort/duration:
+    team sports (cricket, football): win=8-10, draw=3-4, loss=0
+    racquet sports: win=6, draw=2, loss=0
+    cue / pool: win=5, draw=2, loss=0
+  Mark confidence:"missing" when defaulting.
+
+  confidence — per-field "high" | "low" | "missing":
+    "high"    rulebook states the value directly
+    "low"     inferred from context
+    "missing" rulebook silent (still output a sensible default; admin reviews)
+
+Use sensible defaults when fields are missing rather than refusing — but
+always flag confidence accurately. Never invent sports that aren't in the
+input. If you're unsure whether a sport has variants, prefer creating one
+entry per variant (better to over-split than to merge incompatible rules).`;
 
 type ParseInput = { text?: string; storagePath?: string };
 

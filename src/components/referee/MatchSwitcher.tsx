@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { Chip, type ChipVariant } from '@/components/shared/Chip';
-import { TEAM_LABEL, TEAM_COLOR_VAR, type TeamId } from '@/types/team';
+import { colorVarFor, teamLabelFor, type TeamId } from '@/types/team';
 import type { MatchStatus } from '@/types/match';
 
 export type SwitcherMatch = {
@@ -35,15 +35,15 @@ export function MatchSwitcher({ matches, current, onChange }: Props) {
             )}
           >
             <span className="flex items-center gap-1">
-              <Dot color={TEAM_COLOR_VAR[m.teamAId]} />
+              <Dot color={colorVarFor(m.teamAId)} />
               <span className="font-display text-[11px] uppercase tracking-[0.06em]">
-                {TEAM_LABEL[m.teamAId].slice(0, 3)}
+                {teamLabelFor(m.teamAId).slice(0, 3)}
               </span>
               <span className="font-mono text-[9px] text-ink-mute">vs</span>
               <span className="font-display text-[11px] uppercase tracking-[0.06em]">
-                {TEAM_LABEL[m.teamBId].slice(0, 3)}
+                {teamLabelFor(m.teamBId).slice(0, 3)}
               </span>
-              <Dot color={TEAM_COLOR_VAR[m.teamBId]} />
+              <Dot color={colorVarFor(m.teamBId)} />
             </span>
             <Chip variant={variant}>{m.status === 'live' ? 'Live' : m.status === 'final' ? 'Final' : 'Sched'}</Chip>
           </button>

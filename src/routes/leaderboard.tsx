@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { createFileRoute } from '@tanstack/react-router';
 import { TopBar } from '@/components/shared/TopBar';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { EventBar } from '@/components/shared/EventBar';
 
 export const Route = createFileRoute('/leaderboard')({
   component: LeaderboardScreen,
@@ -20,6 +21,7 @@ function LeaderboardScreen() {
     <>
       <TopBar title="The Board" />
       <main className="mx-auto max-w-[420px] pb-28">
+        <EventBar />
         <div className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-5 pb-2">
           {SPORTS.map((sport) => {
             const active = filter === sport;
