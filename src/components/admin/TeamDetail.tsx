@@ -110,6 +110,15 @@ export function TeamDetail({ eventId, teamId, onClose }: Props) {
 
   const [search, setSearch] = useState('');
 
+  // Lookup of every team in this event. Used to detect "orphaned" players
+  // whose `currentTeamId` points at a team that no longer exists, so the
+  // picker can render them as effectively unassigned.
+  const teamsById = useMemo(() => {
+    const m = new Map<string, TeamDoc>();
+    for (const team of allTeams.data ?? []) m.set(team.id, team);
+    return m;
+  }, [allTeams.data]);
+
   const teamMembers = allPeople.filter((p) => p.currentTeamId === teamId);
 
   // Fuse index — fuzzy, typo-tolerant. Rebuilt only when the player
@@ -130,10 +139,14 @@ export function TeamDetail({ eventId, teamId, onClose }: Props) {
    * we narrow to matches; either way the list is sorted in three priority
    * tiers, alphabetically within each:
    *
-   *   1. Unassigned — pickable, highest priority (top of the list)
+   *   1. Unassigned — pickable, highest priority (top of the list).
+   *      This also covers ORPHANS — players whose teamId points at a
+   *      team that no longer exists (e.g. the team was deleted). They
+   *      look unassigned to the admin and get auto-healed the moment
+   *      they're picked into a real team.
    *   2. On another team — visible but greyed, with that team's color +
-   *      name chip so the admin sees the conflict at a glance
-   *   3. Already on this team — visible but greyed (tap to remove)
+   *      name chip so the admin sees the conflict at a glance.
+   *   3. Already on this team — visible but greyed (tap to remove).
    */
   const visiblePlayers = useMemo(() => {
     const q = search.trim();
@@ -144,12 +157,14 @@ export function TeamDetail({ eventId, teamId, onClose }: Props) {
     const onOther: PersonRow[] = [];
     const onThis: PersonRow[] = [];
     for (const p of base) {
-      if (!p.currentTeamId) unassigned.push(p);
-      else if (p.currentTeamId === teamId) onThis.push(p);
+      const tid = p.currentTeamId;
+      if (!tid) unassigned.push(p);
+      else if (tid === teamId) onThis.push(p);
+      else if (!teamsById.has(tid)) unassigned.push(p); // orphan → effectively unassigned
       else onOther.push(p);
     }
     return [...unassigned.sort(cmp), ...onOther.sort(cmp), ...onThis.sort(cmp)];
-  }, [allPeople, fuse, search, teamId]);
+  }, [allPeople, fuse, search, teamId, teamsById]);
 
   const assignToTeam = useMutation({
     mutationFn: async (args: { person: PersonRow; nextTeamId: string | null }) => {
@@ -259,8 +274,6 @@ export function TeamDetail({ eventId, teamId, onClose }: Props) {
 
   const t = team.data;
   const color = colorVarFor(t.color);
-  const teamsById = new Map<string, TeamDoc>();
-  for (const team of allTeams.data ?? []) teamsById.set(team.id, team);
 
   // Any team member (staged or claimed) can be the Group Captain. The
   // assignment is stored as an email, so when a staged player eventually
