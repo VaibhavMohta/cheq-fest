@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { deleteDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import Fuse from 'fuse.js';
 import { Avatar } from '@/components/shared/Avatar';
 import { Button } from '@/components/shared/Button';
 import { PlayerPicker } from '@/components/shared/PlayerPicker';
@@ -110,17 +111,45 @@ export function TeamDetail({ eventId, teamId, onClose }: Props) {
   const [search, setSearch] = useState('');
 
   const teamMembers = allPeople.filter((p) => p.currentTeamId === teamId);
-  const searchResults = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return [] as PersonRow[];
-    return allPeople
-      .filter(
-        (p) =>
-          p.currentTeamId !== teamId &&
-          (p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q)),
-      )
-      .slice(0, 12);
-  }, [allPeople, search, teamId]);
+
+  // Fuse index — fuzzy, typo-tolerant. Rebuilt only when the player
+  // directory itself changes, so typing is cheap.
+  const fuse = useMemo(
+    () =>
+      new Fuse(allPeople, {
+        keys: ['name', 'email'],
+        threshold: 0.4,
+        ignoreLocation: true,
+        minMatchCharLength: 2,
+      }),
+    [allPeople],
+  );
+
+  /**
+   * The "Add players" list is always populated. When a search is active
+   * we narrow to matches; either way the list is sorted in three priority
+   * tiers, alphabetically within each:
+   *
+   *   1. Unassigned — pickable, highest priority (top of the list)
+   *   2. On another team — visible but greyed, with that team's color +
+   *      name chip so the admin sees the conflict at a glance
+   *   3. Already on this team — visible but greyed (tap to remove)
+   */
+  const visiblePlayers = useMemo(() => {
+    const q = search.trim();
+    const base = q ? fuse.search(q).map((r) => r.item) : allPeople;
+    const cmp = (a: PersonRow, b: PersonRow) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    const unassigned: PersonRow[] = [];
+    const onOther: PersonRow[] = [];
+    const onThis: PersonRow[] = [];
+    for (const p of base) {
+      if (!p.currentTeamId) unassigned.push(p);
+      else if (p.currentTeamId === teamId) onThis.push(p);
+      else onOther.push(p);
+    }
+    return [...unassigned.sort(cmp), ...onOther.sort(cmp), ...onThis.sort(cmp)];
+  }, [allPeople, fuse, search, teamId]);
 
   const assignToTeam = useMutation({
     mutationFn: async (args: { person: PersonRow; nextTeamId: string | null }) => {
@@ -377,61 +406,107 @@ export function TeamDetail({ eventId, teamId, onClose }: Props) {
             placeholder="Start typing…"
           />
         </FormField>
-        {search && searchResults.length === 0 && (
-          <p className="font-mono text-[10px] text-ink-mute">No matching players.</p>
+        <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-mute">
+          {search.trim()
+            ? `${visiblePlayers.length} match${visiblePlayers.length === 1 ? '' : 'es'}`
+            : `${visiblePlayers.length} player${visiblePlayers.length === 1 ? '' : 's'} total`}
+          {' · '}unassigned shown first
+        </p>
+        {visiblePlayers.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-line px-3 py-3 text-center font-mono text-[10px] uppercase tracking-[0.06em] text-ink-mute">
+            No matching players.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {visiblePlayers.map((p) => {
+              const onThisTeam = p.currentTeamId === teamId;
+              const onAnotherTeam = !!p.currentTeamId && !onThisTeam;
+              const otherTeam = onAnotherTeam
+                ? teamsById.get(p.currentTeamId!) ?? null
+                : null;
+              const otherTeamName = otherTeam?.name ?? p.currentTeamId;
+              const otherTeamColor = otherTeam ? colorVarFor(otherTeam.color) : 'var(--ink-dim)';
+              const dimmed = onThisTeam || onAnotherTeam;
+
+              const onToggle = () => {
+                if (onThisTeam) {
+                  assignToTeam.mutate({ person: p, nextTeamId: null });
+                  return;
+                }
+                if (onAnotherTeam) {
+                  if (
+                    !window.confirm(
+                      `${p.name} is currently on ${otherTeamName}. Move them to ${t.name}?`,
+                    )
+                  ) {
+                    return;
+                  }
+                }
+                assignToTeam.mutate({ person: p, nextTeamId: teamId });
+              };
+
+              return (
+                <li
+                  key={p.key}
+                  className="flex items-center gap-3 rounded-xl border border-line bg-bg-card px-3 py-2 transition"
+                  style={{ opacity: dimmed ? 0.55 : 1 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={onThisTeam}
+                    onChange={onToggle}
+                    className="h-4 w-4 cursor-pointer accent-accent"
+                    aria-label={onThisTeam ? `Remove ${p.name}` : `Add ${p.name}`}
+                  />
+                  <Avatar name={p.name} size={32} />
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className="truncate text-sm font-bold"
+                      style={{ color: dimmed ? 'var(--ink-dim)' : 'var(--ink)' }}
+                    >
+                      {p.name}
+                    </p>
+                    <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-mute">
+                      {p.email}
+                    </p>
+                  </div>
+                  {onThisTeam && (
+                    <span
+                      className="rounded-md border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em]"
+                      style={{
+                        color: colorVarFor(t.color),
+                        borderColor: 'color-mix(in oklab, currentColor 40%, transparent)',
+                      }}
+                    >
+                      On {t.name}
+                    </span>
+                  )}
+                  {onAnotherTeam && (
+                    <span
+                      className="flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em]"
+                      style={{
+                        color: otherTeamColor,
+                        borderColor: 'color-mix(in oklab, currentColor 40%, transparent)',
+                      }}
+                    >
+                      <span
+                        aria-hidden
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ background: otherTeamColor }}
+                      />
+                      On {otherTeamName}
+                    </span>
+                  )}
+                  {!p.isClaimed && (
+                    <span className="rounded-md border border-line bg-bg px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-dim">
+                      Staged
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         )}
-        <ul className="flex flex-col gap-1.5">
-          {searchResults.map((p) => {
-            const onAnotherTeam = !!p.currentTeamId;
-            const otherTeamName = onAnotherTeam
-              ? teamsById.get(p.currentTeamId!)?.name ?? p.currentTeamId
-              : null;
-            return (
-              <li
-                key={p.key}
-                className="flex items-center gap-3 rounded-xl border border-line bg-bg-card px-3 py-2"
-              >
-                <input
-                  type="checkbox"
-                  checked={false}
-                  onChange={() => {
-                    if (
-                      onAnotherTeam &&
-                      !window.confirm(
-                        `${p.name} is currently on ${otherTeamName}. Move them to ${t.name}?`,
-                      )
-                    ) {
-                      return;
-                    }
-                    assignToTeam.mutate({ person: p, nextTeamId: teamId });
-                  }}
-                  className="h-4 w-4 cursor-pointer accent-accent"
-                  aria-label={`Add ${p.name}`}
-                />
-                <Avatar name={p.name} size={32} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold">{p.name}</p>
-                  <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
-                    {p.email}
-                  </p>
-                </div>
-                {onAnotherTeam && (
-                  <span
-                    className="rounded-md border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em]"
-                    style={{ color: 'var(--gold)', borderColor: 'color-mix(in oklab, var(--gold) 40%, transparent)' }}
-                  >
-                    On {otherTeamName}
-                  </span>
-                )}
-                {!p.isClaimed && (
-                  <span className="rounded-md border border-line bg-bg px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-dim">
-                    Staged
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
       </section>
 
       {/* Danger zone */}
