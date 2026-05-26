@@ -4,6 +4,7 @@ import { deleteDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Avatar } from '@/components/shared/Avatar';
 import { Button } from '@/components/shared/Button';
+import { PlayerPicker } from '@/components/shared/PlayerPicker';
 import {
   stagedPlayersCol,
   teamRef,
@@ -13,6 +14,7 @@ import {
 import { storage } from '@/lib/firebase';
 import { colorVarFor, flagInitials } from '@/types/team';
 import type { TeamDoc } from '@/types/player';
+import type { PersonRow as DirectoryPersonRow } from '@/lib/playerDirectory';
 import { FormField } from './FormField';
 
 const teamsQk = (eventId: string) => ['admin', 'teams', eventId] as const;
@@ -285,19 +287,23 @@ export function TeamDetail({ eventId, teamId, onClose }: Props) {
             Add players to this team first.
           </p>
         ) : (
-          <select
-            value={t.groupCaptainEmail ?? ''}
-            onChange={(e) => setGroupCaptain.mutate(e.target.value || null)}
-            className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm focus:border-accent focus:outline-none"
-          >
-            <option value="">— No Group Captain —</option>
-            {gcCandidates.map((m) => (
-              <option key={m.key} value={m.email.toLowerCase()}>
-                {m.name}
-                {!m.isClaimed ? ' (staged — assigns on sign-in)' : ''}
-              </option>
-            ))}
-          </select>
+          (() => {
+            const gcEmail = t.groupCaptainEmail?.toLowerCase() ?? '';
+            const candidates = gcCandidates as DirectoryPersonRow[];
+            const picked = gcEmail
+              ? candidates.filter((p) => p.email.toLowerCase() === gcEmail)
+              : [];
+            return (
+              <PlayerPicker
+                mode="single"
+                available={candidates}
+                selected={picked}
+                onChange={(next) => setGroupCaptain.mutate(next[0]?.email.toLowerCase() ?? null)}
+                emptySelectedLabel="No Group Captain yet"
+                searchPlaceholder="Search team members…"
+              />
+            );
+          })()
         )}
       </section>
 

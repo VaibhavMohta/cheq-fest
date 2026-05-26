@@ -11,9 +11,11 @@ import {
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore';
-import { matchesCol, matchRef, sportsCol, teamsCol, usersCol } from '@/lib/db';
+import { matchesCol, matchRef, sportsCol, teamsCol } from '@/lib/db';
 import { emptyMatchState, type MatchDoc, type MatchStatus } from '@/types/match';
 import { teamLabelFor, type TeamId } from '@/types/team';
+import { useAllEventPlayers, type PersonRow } from '@/lib/playerDirectory';
+import { PlayerPicker } from '@/components/shared/PlayerPicker';
 
 type TeamOption = { id: TeamId; name: string };
 
@@ -36,7 +38,6 @@ import { RequireEvent } from './RequireEvent';
 const matchesQk = (eventId: string) => ['admin', 'matches', eventId] as const;
 const sportsQk = (eventId: string) => ['admin', 'sports', eventId] as const;
 const teamsQk = (eventId: string) => ['admin', 'teams', eventId] as const;
-const USERS_QK = ['admin', 'claimedPlayers'] as const;
 
 export function MatchesTab() {
   return (
@@ -95,13 +96,7 @@ function MatchesTabInner({
       return snap.docs.map((d) => ({ id: d.id as TeamId, ...d.data() }));
     },
   });
-  const users = useQuery({
-    queryKey: USERS_QK,
-    queryFn: async () => {
-      const snap = await getDocs(usersCol);
-      return snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
-    },
-  });
+  const { people, isLoading: peopleLoading } = useAllEventPlayers();
   const matches = useQuery({
     queryKey: matchesQk(eventId),
     queryFn: async () => {
@@ -110,11 +105,11 @@ function MatchesTabInner({
     },
   });
 
-  const usersByEmail = useMemo(() => {
-    const m = new Map<string, string>(); // email → uid
-    for (const u of users.data ?? []) m.set(u.email.toLowerCase(), u.uid);
+  const peopleByUid = useMemo(() => {
+    const m = new Map<string, PersonRow>();
+    for (const p of people) if (p.uid) m.set(p.uid, p);
     return m;
-  }, [users.data]);
+  }, [people]);
 
   const create = useMutation({
     mutationFn: async (args: {
@@ -151,7 +146,7 @@ function MatchesTabInner({
     onSuccess: () => void qc.invalidateQueries({ queryKey: matchesQk(eventId) }),
   });
 
-  if (sports.isLoading || teams.isLoading || users.isLoading) {
+  if (sports.isLoading || teams.isLoading || peopleLoading) {
     return <p className="px-5 text-ink-dim">Loading…</p>;
   }
 
@@ -191,7 +186,8 @@ function MatchesTabInner({
             id={m.id}
             data={m}
             teams={availableTeams}
-            usersByEmail={usersByEmail}
+            people={people}
+            peopleByUid={peopleByUid}
             onPatch={(patch) => updateMatch.mutate({ id: m.id, patch })}
             onRemove={() => remove.mutate(m.id)}
           />
@@ -355,19 +351,41 @@ function MatchRow({
   id,
   data,
   teams,
-  usersByEmail,
+  people,
+  peopleByUid,
   onPatch,
   onRemove,
 }: {
   id: string;
   data: MatchDoc;
   teams: TeamOption[];
-  usersByEmail: Map<string, string>;
+  people: PersonRow[];
+  peopleByUid: Map<string, PersonRow>;
   onPatch: (patch: Partial<MatchDoc>) => void;
   onRemove: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [refsText, setRefsText] = useState('');
+
+  // Hydrate the picker's "selected" list from the persisted refereeUids.
+  // Refs without a matching uid in the directory have probably been deleted
+  // — drop them silently so the picker stays consistent.
+  const selectedRefs = useMemo<PersonRow[]>(() => {
+    const out: PersonRow[] = [];
+    for (const uid of data.refereeUids) {
+      const p = peopleByUid.get(uid);
+      if (p) out.push(p);
+    }
+    return out;
+  }, [data.refereeUids, peopleByUid]);
+
+  function persistRefs(next: PersonRow[]) {
+    // Security rule for refereeEvents requires real uids. Staged players
+    // are allowed in the picker as placeholders but stripped at write.
+    const uids = Array.from(
+      new Set(next.filter((p) => p.uid).map((p) => p.uid as string)),
+    );
+    onPatch({ refereeUids: uids });
+  }
 
   return (
     <div className="rounded-2xl border border-line bg-bg-card">
@@ -399,55 +417,19 @@ function MatchRow({
           </p>
 
           <FormField
-            label="Referee emails"
-            hint="Comma-separated @cheq.one addresses. Each must already have signed in."
+            label="Referees"
+            hint="Tap to add or remove. Long-press a tile to drag. Search by name or email."
           >
-            <TextInput
-              value={refsText}
-              onChange={(e) => setRefsText(e.target.value)}
-              placeholder="amit@cheq.one, nia@cheq.one"
+            <PlayerPicker
+              available={people}
+              selected={selectedRefs}
+              onChange={persistRefs}
+              rowWarning={(p) => (p.uid ? null : 'Needs sign-in')}
+              emptySelectedLabel="No referees assigned yet."
+              emptyAvailableLabel="No matching players."
+              searchPlaceholder="Search referees…"
             />
-            <div className="mt-1 flex flex-wrap gap-1">
-              {data.refereeUids.map((uid) => (
-                <span
-                  key={uid}
-                  className="rounded-md border border-line bg-bg px-1.5 py-0.5 font-mono text-[10px] text-ink-dim"
-                >
-                  {uid.slice(0, 6)}…
-                </span>
-              ))}
-              {data.refereeUids.length === 0 && (
-                <span className="font-mono text-[10px] text-ink-mute">No refs assigned</span>
-              )}
-            </div>
           </FormField>
-          <Button
-            variant="ghost"
-            type="button"
-            onClick={() => {
-              const emails = refsText
-                .split(',')
-                .map((s) => s.trim().toLowerCase())
-                .filter(Boolean);
-              const uids: string[] = [];
-              const missing: string[] = [];
-              for (const e of emails) {
-                const uid = usersByEmail.get(e);
-                if (uid) uids.push(uid);
-                else missing.push(e);
-              }
-              if (missing.length > 0) {
-                alert(`These emails haven't signed in yet:\n${missing.join('\n')}`);
-              }
-              if (uids.length > 0) {
-                onPatch({ refereeUids: Array.from(new Set([...data.refereeUids, ...uids])) });
-                setRefsText('');
-              }
-            }}
-            className="!w-auto !px-4 !py-2"
-          >
-            Add referees
-          </Button>
 
           <div className="flex flex-wrap gap-2">
             {data.status === 'scheduled' && (

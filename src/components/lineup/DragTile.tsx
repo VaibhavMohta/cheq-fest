@@ -7,9 +7,13 @@ type Props = {
   player: LineupPlayer;
   /** Surface color behind the tile — passed to the captain badge ring. */
   surfaceColor?: string;
+  /** Dim the tile when a search filter is active and this player doesn't
+   *  match. The tile stays in place (no bucket reflow) so spatial memory
+   *  is preserved. */
+  dimmed?: boolean;
 };
 
-export function DragTile({ player, surfaceColor = 'var(--bg-card)' }: Props) {
+export function DragTile({ player, surfaceColor = 'var(--bg-card)', dimmed }: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: player.uid,
     disabled: player.isCaptain,
@@ -38,8 +42,9 @@ export function DragTile({ player, surfaceColor = 'var(--bg-card)' }: Props) {
       style={style}
       aria-roledescription={player.isCaptain ? 'Locked tile' : 'Draggable tile'}
       className={clsx(
-        'flex select-none flex-col items-center gap-1.5 rounded-xl px-1 py-2 touch-none',
+        'flex select-none flex-col items-center gap-1.5 rounded-xl px-1 py-2 touch-none transition-opacity',
         isDragging && 'opacity-40',
+        dimmed && !isDragging && 'opacity-25',
         player.isCaptain ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing',
       )}
     >
