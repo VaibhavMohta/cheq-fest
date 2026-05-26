@@ -22,12 +22,6 @@
   /* Structure */
   --line: #2a2724;
   --gold: #f5c542;
-
-  /* Team colors (must stay aligned with --accent / --accent-2/3/4) */
-  --team-tridents: var(--accent);
-  --team-phantoms: var(--accent-3);
-  --team-blazers: var(--accent-2);
-  --team-voltron: var(--accent-4);
 }
 
 /* Expose tokens to Tailwind v4 utilities.

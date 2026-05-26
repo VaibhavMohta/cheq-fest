@@ -55,6 +55,7 @@ export function colorVarFor(value: string | null | undefined): string {
   if (!value) return 'var(--ink-mute)';
   // Hex passes through as-is.
   if (value.startsWith('#')) return value;
+  // Legacy 4-slot enum names (early teams stored these instead of hex).
   switch (value) {
     case 'accent':
       return 'var(--accent)';
@@ -64,16 +65,9 @@ export function colorVarFor(value: string | null | undefined): string {
       return 'var(--accent-3)';
     case 'accent-4':
       return 'var(--accent-4)';
-    // Legacy demo team ids.
-    case 'tridents':
-      return 'var(--accent)';
-    case 'phantoms':
-      return 'var(--accent-3)';
-    case 'blazers':
-      return 'var(--accent-2)';
-    case 'voltron':
-      return 'var(--accent-4)';
     default:
+      // Anything else (raw team id, missing data) → neutral mute. Never
+      // return a fabricated team color for an unknown id.
       return 'var(--ink-mute)';
   }
 }
@@ -97,14 +91,14 @@ export function colorLabelFor(value: string | null | undefined): string {
   }
 }
 
-/** Human label for a legacy demo team id, falling back to a Title-cased
- *  version of the id itself. Use this when you have a string teamId but no
- *  full TeamDoc handy (e.g. the demo screens). For real teams, prefer
- *  `team.name` from the TeamDoc directly. */
+/** Last-ditch label for a team id when no real team name is available
+ *  (e.g. an orphaned match doc pointing at a deleted team). Returns the
+ *  raw id verbatim — deliberately *not* prettified, so the admin sees the
+ *  ghost rather than a fabricated name. Real screens should resolve
+ *  `team.name` from the Firestore doc and pass it down explicitly. */
 export function teamLabelFor(teamId: string | null | undefined): string {
   if (!teamId) return '';
-  if (teamId in TEAM_LABEL) return TEAM_LABEL[teamId]!;
-  return teamId.charAt(0).toUpperCase() + teamId.slice(1);
+  return teamId;
 }
 
 /** First two letters of the team name, uppercased. */
@@ -116,27 +110,5 @@ export function flagInitials(name: string | null | undefined): string {
   return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
 }
 
-// ─── Legacy hardcoded demo teams ─────────────────────────────────────────
-// Kept so the existing /arena, /lineup, /team-mgmt, /dev/components demo
-// screens keep rendering without live data. New teams (created via the
-// admin Teams tab) use admin-chosen names and color slots stored on the
-// TeamDoc and do not appear in these maps.
-
-export const TEAM_IDS = ['tridents', 'phantoms', 'blazers', 'voltron'] as const;
-/** TeamId is just a string now — admins can create any slug. The TEAM_IDS
- *  array above is a legacy default list used by demo screens. */
+/** TeamId is just a string — admin picks the slug at team creation. */
 export type TeamId = string;
-
-export const TEAM_COLOR_VAR: Record<string, string> = {
-  tridents: 'var(--accent)',
-  phantoms: 'var(--accent-3)',
-  blazers: 'var(--accent-2)',
-  voltron: 'var(--accent-4)',
-};
-
-export const TEAM_LABEL: Record<string, string> = {
-  tridents: 'Tridents',
-  phantoms: 'Phantoms',
-  blazers: 'Blazers',
-  voltron: 'Voltron',
-};

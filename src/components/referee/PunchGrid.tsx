@@ -1,12 +1,18 @@
 import clsx from 'clsx';
 import type { TrackableEvent } from '@/types/sport';
-import { colorVarFor, teamLabelFor, type TeamId } from '@/types/team';
+import { colorVarFor, type TeamId } from '@/types/team';
 
 type Side = 'A' | 'B';
 
 type Props = {
   teamA: TeamId;
   teamB: TeamId;
+  /** Display name + stored color for each side; threaded down from the
+   *  parent so the punch grid never invents a name from a raw teamId. */
+  teamAName: string;
+  teamBName: string;
+  teamAColor: string;
+  teamBColor: string;
   trackable: readonly TrackableEvent[];
   /** Cricket-style numeric runs. Passed separately because they need a value. */
   showRunButtons?: boolean;
@@ -45,9 +51,16 @@ const ACCENT: Partial<Record<TrackableEvent, string>> = {
   yellow: 'var(--gold)',
 };
 
-export function PunchGrid({ teamA, teamB, trackable, showRunButtons, onPunch, disabled }: Props) {
-  // Filter trackables that are score-relevant — others (sub, timeout) are
-  // typed in a separate "Notes" row at the bottom.
+export function PunchGrid({
+  teamAName,
+  teamBName,
+  teamAColor,
+  teamBColor,
+  trackable,
+  showRunButtons,
+  onPunch,
+  disabled,
+}: Props) {
   const score = trackable.filter((t) => !['sub', 'timeout', 'move'].includes(t));
   const notes = trackable.filter((t) => ['sub', 'timeout', 'move'].includes(t));
 
@@ -55,7 +68,8 @@ export function PunchGrid({ teamA, teamB, trackable, showRunButtons, onPunch, di
     <section className="mx-5 mb-4 flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-2">
         <SidePanel
-          teamId={teamA}
+          name={teamAName}
+          color={teamAColor}
           side="A"
           events={score}
           showRunButtons={showRunButtons}
@@ -63,7 +77,8 @@ export function PunchGrid({ teamA, teamB, trackable, showRunButtons, onPunch, di
           disabled={disabled}
         />
         <SidePanel
-          teamId={teamB}
+          name={teamBName}
+          color={teamBColor}
           side="B"
           events={score}
           showRunButtons={showRunButtons}
@@ -83,7 +98,7 @@ export function PunchGrid({ teamA, teamB, trackable, showRunButtons, onPunch, di
                 disabled={disabled}
                 className="rounded-xl border border-line bg-bg px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.06em] text-ink-dim active:scale-[0.96] disabled:opacity-50"
               >
-                {LABEL[t]} · {teamLabelFor(side === 'A' ? teamA : teamB).slice(0, 3)}
+                {LABEL[t]} · {(side === 'A' ? teamAName : teamBName).slice(0, 3)}
               </button>
             )),
           )}
@@ -94,31 +109,28 @@ export function PunchGrid({ teamA, teamB, trackable, showRunButtons, onPunch, di
 }
 
 function SidePanel({
-  teamId,
+  name,
+  color,
   side,
   events,
   showRunButtons,
   onPunch,
   disabled,
 }: {
-  teamId: TeamId;
+  name: string;
+  color: string;
   side: Side;
   events: TrackableEvent[];
   showRunButtons?: boolean;
   onPunch: Props['onPunch'];
   disabled?: boolean;
 }) {
+  const colorVar = colorVarFor(color);
   return (
     <div className="rounded-2xl border border-line bg-bg-card p-2">
       <div className="mb-2 flex items-center gap-1.5 px-1">
-        <span
-          aria-hidden
-          className="h-2 w-2 rounded-full"
-          style={{ background: colorVarFor(teamId) }}
-        />
-        <span className="font-display text-[12px] uppercase tracking-[0.06em]">
-          {teamLabelFor(teamId)}
-        </span>
+        <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: colorVar }} />
+        <span className="font-display text-[12px] uppercase tracking-[0.06em]">{name}</span>
       </div>
       <div className="grid grid-cols-3 gap-1.5">
         {showRunButtons &&

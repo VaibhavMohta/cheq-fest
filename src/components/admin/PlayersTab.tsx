@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { deleteDoc, doc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/shared/Button';
-import { TEAM_LABEL, type TeamId } from '@/types/team';
+import type { TeamId } from '@/types/team';
 import { parsePlayersCsv } from '@/lib/csv';
 import {
   emailDocId,
@@ -326,7 +326,7 @@ function PlayerRow({
         <StatusBadge status={status} />
         {teamId ? (
           <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-ink-dim">
-            {TEAM_LABEL[teamId]}
+            {teamId}
           </span>
         ) : (
           <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">

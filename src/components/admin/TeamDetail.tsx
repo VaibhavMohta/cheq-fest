@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { deleteDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import Fuse from 'fuse.js';
 import { Avatar } from '@/components/shared/Avatar';
 import { Button } from '@/components/shared/Button';
 import { PlayerPicker } from '@/components/shared/PlayerPicker';
 import {
+  matchesCol,
+  refereeEventsCol,
   stagedPlayersCol,
   teamRef,
   teamsCol,
@@ -248,14 +250,43 @@ export function TeamDetail({ eventId, teamId, onClose }: Props) {
 
   const removeTeam = useMutation({
     mutationFn: async () => {
-      // Detach members first so they don't end up dangling on a missing team.
+      // 1) Detach members. Email-keyed membership lives both on the user
+      //    doc (teamId) and on the (now-deleted) team's members[] — we
+      //    only need to clear the user side; the team doc is going away.
       await Promise.all(
         teamMembers.map((m) => setDoc(m.membershipRef, { teamId: null }, { merge: true })),
       );
+
+      // 2) Cascade-delete every match where this team plays, plus the
+      //    refereeEvents subcollection under each. Firestore doesn't do
+      //    recursive deletes, so we walk it ourselves.
+      const asTeamA = await getDocs(
+        query(matchesCol(eventId), where('teamAId', '==', teamId)),
+      );
+      const asTeamB = await getDocs(
+        query(matchesCol(eventId), where('teamBId', '==', teamId)),
+      );
+      const matchIds = new Set<string>();
+      for (const d of asTeamA.docs) matchIds.add(d.id);
+      for (const d of asTeamB.docs) matchIds.add(d.id);
+      for (const matchId of matchIds) {
+        const refEvents = await getDocs(refereeEventsCol(eventId, matchId));
+        await Promise.all(refEvents.docs.map((e) => deleteDoc(e.ref)));
+        await deleteDoc(doc(matchesCol(eventId), matchId));
+      }
+
+      // 3) Wipe the team's roster subcollection (one doc per sport).
+      const rosters = await getDocs(
+        collection(teamRef(eventId, teamId), 'rosters'),
+      );
+      await Promise.all(rosters.docs.map((r) => deleteDoc(r.ref)));
+
+      // 4) Finally drop the team doc itself.
       await deleteDoc(teamRef(eventId, teamId));
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: teamsQk(eventId) });
+      void qc.invalidateQueries({ queryKey: ['admin', 'matches', eventId] });
       onClose();
     },
   });

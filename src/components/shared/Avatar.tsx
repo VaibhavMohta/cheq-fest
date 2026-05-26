@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { TEAM_COLOR_VAR, type TeamId } from '@/types/team';
+import { colorVarFor, type TeamId } from '@/types/team';
 import { initialsFromName } from '@/lib/initials';
 import { CaptainBadge } from './CaptainBadge';
 
@@ -34,7 +34,7 @@ export function Avatar({
   className,
 }: Props) {
   const photoUrl = adminPhotoUrl || googlePhotoUrl || null;
-  const teamColor = teamId ? TEAM_COLOR_VAR[teamId] : 'var(--bg-elev)';
+  const teamColor = teamId ? colorVarFor(teamId) : 'var(--bg-elev)';
   const initials = initialsFromName(name);
 
   // Tweak the captain badge size for tiny avatars (arena faces).

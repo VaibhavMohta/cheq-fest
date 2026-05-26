@@ -86,7 +86,7 @@ function ProfileScreen() {
 
         <SectionTitle>Quick Actions</SectionTitle>
         <div className="mx-5 flex flex-col gap-2">
-          <QuickActionTile to="/teams/tridents" label="My Team" sub="Tap to view (demo)" disabled />
+          <QuickActionTile to="/leaderboard" label="My Team" sub="Standings + roster" />
           <QuickActionTile to="/arena" label="Live Now" sub="Animated arena" />
 
           {(isRef || role.is('admin') || role.is('super-admin')) && (

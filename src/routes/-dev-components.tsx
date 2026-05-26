@@ -5,7 +5,16 @@ import { Chip } from '@/components/shared/Chip';
 import { IconButton } from '@/components/shared/IconButton';
 import { TopBar } from '@/components/shared/TopBar';
 import { BackIcon, MenuIcon } from '@/components/shared/icons';
-import { TEAM_IDS, teamLabelFor } from '@/types/team';
+
+// Generic palette samples for the avatar showcase below — these are just
+// hex strings, not team ids. Components/admin/TeamsTab.tsx ships the real
+// palette; we only need a few visually distinct hexes here.
+const SAMPLE_COLORS: { hex: string; label: string }[] = [
+  { hex: '#ff4a1c', label: 'Lava' },
+  { hex: '#e8ff4a', label: 'Lime' },
+  { hex: '#4ad4ff', label: 'Cyan' },
+  { hex: '#ff4ad0', label: 'Pink' },
+];
 
 
 export default function ComponentsShowcase() {
@@ -27,21 +36,21 @@ export default function ComponentsShowcase() {
       <main className="mx-auto flex max-w-[420px] flex-col gap-8 px-5 pb-28">
         <Section title="Avatars · team colors · captain badge">
           <div className="flex flex-wrap items-end gap-4">
-            {TEAM_IDS.map((teamId) => (
-              <Stack key={teamId} label={teamLabelFor(teamId)}>
-                <Avatar name="Shah Mehta" teamId={teamId} size={56} />
+            {SAMPLE_COLORS.map((c) => (
+              <Stack key={c.hex} label={c.label}>
+                <Avatar name="Shah Mehta" teamId={c.hex} size={56} />
               </Stack>
             ))}
             <Stack label="No team">
               <Avatar name="Riya N" size={56} />
             </Stack>
             <Stack label="Captain">
-              <Avatar name="Arjun S" teamId="tridents" size={56} isCaptain />
+              <Avatar name="Arjun S" teamId={SAMPLE_COLORS[0]!.hex} size={56} isCaptain />
             </Stack>
             <Stack label="Photo (Google)">
               <Avatar
                 name="Photo Test"
-                teamId="phantoms"
+                teamId={SAMPLE_COLORS[2]!.hex}
                 size={56}
                 googlePhotoUrl="https://i.pravatar.cc/96?img=12"
               />
@@ -55,7 +64,7 @@ export default function ComponentsShowcase() {
               <Stack key={size} label={`${size}px`}>
                 <Avatar
                   name="Kira Vee"
-                  teamId="blazers"
+                  teamId={SAMPLE_COLORS[1]!.hex}
                   size={size}
                   isCaptain={size >= 56}
                   surfaceColor="var(--bg-card)"

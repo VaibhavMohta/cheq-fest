@@ -13,20 +13,18 @@ import {
 } from 'firebase/firestore';
 import { matchesCol, matchRef, sportsCol, teamsCol } from '@/lib/db';
 import { emptyMatchState, type MatchDoc, type MatchStatus } from '@/types/match';
-import { teamLabelFor, type TeamId } from '@/types/team';
+import type { TeamId } from '@/types/team';
 import { useAllEventPlayers, type PersonRow } from '@/lib/playerDirectory';
 import { PlayerPicker } from '@/components/shared/PlayerPicker';
 
 type TeamOption = { id: TeamId; name: string };
 
-/** Resolve a team id to a display name from the loaded team list, falling
- *  back to the legacy `teamLabelFor()` helper for the hardcoded demo ids
- *  and finally to the raw id. NEVER returns an empty string. */
+/** Resolve a team id to a display name from the loaded team list. Falls
+ *  back to the raw id (never an empty string) when the team is missing —
+ *  e.g. for stale match docs that point at a deleted team. */
 function teamNameFor(teamId: TeamId, teams: TeamOption[]): string {
   const team = teams.find((t) => t.id === teamId);
   if (team && team.name.trim()) return team.name;
-  const legacy = teamLabelFor(teamId);
-  if (legacy && legacy.trim()) return legacy;
   return teamId;
 }
 import { Button } from '@/components/shared/Button';

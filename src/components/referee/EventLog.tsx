@@ -1,6 +1,6 @@
 import { Timestamp } from 'firebase/firestore';
 import clsx from 'clsx';
-import { TEAM_LABEL, type TeamId } from '@/types/team';
+import type { TeamId } from '@/types/team';
 import type { RefereeEventDoc } from '@/types/match';
 
 type LogEntry = RefereeEventDoc & { id: string };
@@ -9,12 +9,17 @@ type Props = {
   events: readonly LogEntry[];
   teamA: TeamId;
   teamB: TeamId;
+  /** Display name of team A. Falls back to raw teamId if not provided. */
+  teamAName?: string;
+  teamBName?: string;
   onUndo: (id: string) => void;
   /** Currently signed-in referee uid — events by others render with attribution. */
   meUid: string | null;
 };
 
-export function EventLog({ events, teamA, teamB, onUndo, meUid }: Props) {
+export function EventLog({ events, teamA, teamB, teamAName, teamBName, onUndo, meUid }: Props) {
+  const nameFor = (side: 'A' | 'B'): string =>
+    side === 'A' ? teamAName ?? teamA : teamBName ?? teamB;
   return (
     <section className="mx-5 mb-24 rounded-2xl border border-line bg-bg-card">
       <header className="border-b border-line px-3 py-2">
@@ -47,7 +52,7 @@ export function EventLog({ events, teamA, teamB, onUndo, meUid }: Props) {
                 {e.side && (
                   <span className="text-ink-dim">
                     {' · '}
-                    {TEAM_LABEL[e.side === 'A' ? teamA : teamB]}
+                    {nameFor(e.side)}
                   </span>
                 )}
                 {meUid && e.by !== meUid && (

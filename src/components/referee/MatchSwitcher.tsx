@@ -1,12 +1,19 @@
 import clsx from 'clsx';
 import { Chip, type ChipVariant } from '@/components/shared/Chip';
-import { colorVarFor, teamLabelFor, type TeamId } from '@/types/team';
+import { colorVarFor, type TeamId } from '@/types/team';
 import type { MatchStatus } from '@/types/match';
 
 export type SwitcherMatch = {
   id: string;
   teamAId: TeamId;
   teamBId: TeamId;
+  /** Resolved display names + stored colors threaded from the parent.
+   *  Caller looks these up from the loaded team docs; the switcher never
+   *  invents a name from the raw id. */
+  teamAName: string;
+  teamBName: string;
+  teamAColor: string;
+  teamBColor: string;
   sportId: string;
   status: MatchStatus;
 };
@@ -23,7 +30,8 @@ export function MatchSwitcher({ matches, current, onChange }: Props) {
     <div className="mx-5 mb-3 flex gap-2 overflow-x-auto pb-1">
       {matches.map((m) => {
         const active = m.id === current;
-        const variant: ChipVariant = m.status === 'live' ? 'live' : m.status === 'final' ? 'done' : 'upcoming';
+        const variant: ChipVariant =
+          m.status === 'live' ? 'live' : m.status === 'final' ? 'done' : 'upcoming';
         return (
           <button
             key={m.id}
@@ -35,17 +43,19 @@ export function MatchSwitcher({ matches, current, onChange }: Props) {
             )}
           >
             <span className="flex items-center gap-1">
-              <Dot color={colorVarFor(m.teamAId)} />
+              <Dot color={colorVarFor(m.teamAColor)} />
               <span className="font-display text-[11px] uppercase tracking-[0.06em]">
-                {teamLabelFor(m.teamAId).slice(0, 3)}
+                {m.teamAName.slice(0, 3).toUpperCase()}
               </span>
               <span className="font-mono text-[9px] text-ink-mute">vs</span>
               <span className="font-display text-[11px] uppercase tracking-[0.06em]">
-                {teamLabelFor(m.teamBId).slice(0, 3)}
+                {m.teamBName.slice(0, 3).toUpperCase()}
               </span>
-              <Dot color={colorVarFor(m.teamBId)} />
+              <Dot color={colorVarFor(m.teamBColor)} />
             </span>
-            <Chip variant={variant}>{m.status === 'live' ? 'Live' : m.status === 'final' ? 'Final' : 'Sched'}</Chip>
+            <Chip variant={variant}>
+              {m.status === 'live' ? 'Live' : m.status === 'final' ? 'Final' : 'Sched'}
+            </Chip>
           </button>
         );
       })}

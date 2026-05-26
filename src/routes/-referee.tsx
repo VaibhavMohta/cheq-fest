@@ -28,9 +28,23 @@ import {
   matchRef,
   refereeEventsCol,
   sportsCol,
+  teamsCol,
 } from '@/lib/db';
 import type { MatchDoc, RefereeEventDoc, Side } from '@/types/match';
 import type { SportDoc, TrackableEvent } from '@/types/sport';
+import type { TeamDoc } from '@/types/player';
+
+/** Resolve a team's display name + stored color (hex/slot) from a map.
+ *  Falls back to the raw id and a neutral color when the team has been
+ *  deleted, so we never invent a "Tridents" out of a ghost id. */
+function resolveTeam(
+  teamId: string,
+  map: Map<string, TeamDoc>,
+): { name: string; color: string } {
+  const t = map.get(teamId);
+  if (t) return { name: t.name, color: t.color };
+  return { name: teamId, color: '' };
+}
 
 
 export default function RefereeScreen() {
@@ -47,8 +61,24 @@ export default function RefereeScreen() {
     return new URLSearchParams(window.location.search).get('matchId');
   }, []);
 
+  // Live team directory for this event so we can resolve names + colors
+  // for every match in the switcher and inside the referee panel without
+  // each child component duplicating the read.
+  const teams = useQuery({
+    queryKey: ['referee', 'teams', activeEventId],
+    enabled: !!activeEventId,
+    queryFn: async (): Promise<Map<string, TeamDoc>> => {
+      if (!activeEventId) return new Map();
+      const snap = await getDocs(teamsCol(activeEventId));
+      const m = new Map<string, TeamDoc>();
+      for (const d of snap.docs) m.set(d.id, d.data());
+      return m;
+    },
+  });
+  const teamsMap = teams.data ?? new Map<string, TeamDoc>();
+
   const myMatches = useQuery({
-    queryKey: ['referee', 'myMatches', uid, isAdmin, activeEventId],
+    queryKey: ['referee', 'myMatches', uid, isAdmin, activeEventId, teamsMap.size],
     enabled: !!uid && !!activeEventId,
     queryFn: async (): Promise<SwitcherMatch[]> => {
       if (!activeEventId) return [];
@@ -57,13 +87,22 @@ export default function RefereeScreen() {
         ? [where('status', 'in', ['live', 'scheduled', 'final'])]
         : [where('refereeUids', 'array-contains', uid)];
       const snap = await getDocs(query(matchesCol(activeEventId), ...constraints));
-      return snap.docs.map((d) => ({
-        id: d.id,
-        teamAId: d.data().teamAId,
-        teamBId: d.data().teamBId,
-        sportId: d.data().sportId,
-        status: d.data().status,
-      }));
+      return snap.docs.map((d) => {
+        const data = d.data();
+        const a = resolveTeam(data.teamAId, teamsMap);
+        const b = resolveTeam(data.teamBId, teamsMap);
+        return {
+          id: d.id,
+          teamAId: data.teamAId,
+          teamBId: data.teamBId,
+          teamAName: a.name,
+          teamBName: b.name,
+          teamAColor: a.color,
+          teamBColor: b.color,
+          sportId: data.sportId,
+          status: data.status,
+        };
+      });
     },
   });
 
@@ -139,7 +178,12 @@ export default function RefereeScreen() {
           onChange={setActiveId}
         />
         {activeId && activeEventId && (
-          <RefereePanel matchId={activeId} eventId={activeEventId} meUid={uid!} />
+          <RefereePanel
+            matchId={activeId}
+            eventId={activeEventId}
+            meUid={uid!}
+            teamsMap={teamsMap}
+          />
         )}
         {activeEvent && (
           <p className="mx-5 mt-3 text-center font-mono text-[10px] uppercase tracking-[0.06em] text-ink-mute">
@@ -155,10 +199,12 @@ function RefereePanel({
   matchId,
   eventId,
   meUid,
+  teamsMap,
 }: {
   matchId: string;
   eventId: string;
   meUid: string;
+  teamsMap: Map<string, TeamDoc>;
 }) {
   const [match, setMatch] = useState<MatchDoc | null>(null);
   const [events, setEvents] = useState<(RefereeEventDoc & { id: string })[]>([]);
@@ -233,11 +279,18 @@ function RefereePanel({
     }
   }
 
+  const a = resolveTeam(match.teamAId, teamsMap);
+  const b = resolveTeam(match.teamBId, teamsMap);
+
   return (
     <>
       <Scoreboard
         teamA={match.teamAId}
         teamB={match.teamBId}
+        teamAName={a.name}
+        teamBName={b.name}
+        teamAColor={a.color}
+        teamBColor={b.color}
         scoreA={match.state.scoreA}
         scoreB={match.state.scoreB}
         onAdd={(side) => void nudgeScore(side, 1)}
@@ -259,6 +312,10 @@ function RefereePanel({
       <PunchGrid
         teamA={match.teamAId}
         teamB={match.teamBId}
+        teamAName={a.name}
+        teamBName={b.name}
+        teamAColor={a.color}
+        teamBColor={b.color}
         trackable={trackable}
         showRunButtons={isCricket}
         disabled={disabled}
@@ -271,6 +328,8 @@ function RefereePanel({
         events={events}
         teamA={match.teamAId}
         teamB={match.teamBId}
+        teamAName={a.name}
+        teamBName={b.name}
         meUid={meUid}
         onUndo={(id) => void undo(id)}
       />

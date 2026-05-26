@@ -1,10 +1,14 @@
 import clsx from 'clsx';
 import { Link } from '@tanstack/react-router';
-import { colorVarFor, teamLabelFor, type TeamId } from '@/types/team';
+import { colorVarFor, flagInitials as initialsOf, type TeamId } from '@/types/team';
 
 type Props = {
   rank: number;
   teamId: TeamId;
+  /** Display name of the team, resolved from the team doc by the caller. */
+  teamName: string;
+  /** Stored color (hex or legacy slot); passed through colorVarFor here. */
+  teamColor: string;
   wins: number;
   draws: number;
   losses: number;
@@ -13,9 +17,20 @@ type Props = {
   trend: number;
 };
 
-export function LeaderboardRow({ rank, teamId, wins, draws, losses, points, trend }: Props) {
+export function LeaderboardRow({
+  rank,
+  teamId,
+  teamName,
+  teamColor,
+  wins,
+  draws,
+  losses,
+  points,
+  trend,
+}: Props) {
   const goldOne = rank === 1;
-  const flagInitials = teamLabelFor(teamId).slice(0, 2).toUpperCase();
+  const flagText = initialsOf(teamName);
+  const colorVar = colorVarFor(teamColor);
 
   return (
     <Link
@@ -43,12 +58,12 @@ export function LeaderboardRow({ rank, teamId, wins, draws, losses, points, tren
       <span
         aria-hidden
         className="grid h-11 w-11 place-items-center rounded-full font-display text-base text-bg"
-        style={{ background: colorVarFor(teamId) }}
+        style={{ background: colorVar }}
       >
-        {flagInitials}
+        {flagText}
       </span>
       <span>
-        <span className="block font-display text-lg uppercase">{teamLabelFor(teamId)}</span>
+        <span className="block font-display text-lg uppercase">{teamName}</span>
         <span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
           {wins}W · {losses}L · {draws}D
         </span>
