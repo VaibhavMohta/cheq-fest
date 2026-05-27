@@ -28,13 +28,23 @@ if (!projectId || !uid) {
   process.exit(1);
 }
 
+// Keep in sync with src/lib/auth.ts and functions/src/onUserCreate.ts.
+const ALLOWED_EMAILS = new Set<string>(['vai.mohta@gmail.com']);
+
+function isAllowedEmail(email: string | undefined | null): boolean {
+  if (!email) return false;
+  const normalized = email.toLowerCase();
+  if (normalized.endsWith('@cheq.one')) return true;
+  return ALLOWED_EMAILS.has(normalized);
+}
+
 initializeApp({ credential: applicationDefault(), projectId });
 
 async function main() {
   const auth = getAuth();
   const user = await auth.getUser(uid!);
-  if (!user.email?.endsWith('@cheq.one')) {
-    console.error(`Refusing: ${user.email} is not a @cheq.one address.`);
+  if (!isAllowedEmail(user.email)) {
+    console.error(`Refusing: ${user.email} is not on the allow-list.`);
     process.exit(2);
   }
   const existing = user.customClaims ?? {};

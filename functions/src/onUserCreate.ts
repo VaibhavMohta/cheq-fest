@@ -5,6 +5,16 @@ import { logger } from 'firebase-functions';
 
 const CHEQ_DOMAIN = 'cheq.one';
 
+// Explicit allow-list of personal emails permitted alongside @cheq.one.
+// Keep in sync with `ALLOWED_EMAILS` in src/lib/auth.ts.
+const ALLOWED_EMAILS = new Set<string>(['vai.mohta@gmail.com']);
+
+function isAllowedEmail(email: string): boolean {
+  const normalized = email.toLowerCase();
+  if (normalized.endsWith(`@${CHEQ_DOMAIN}`)) return true;
+  return ALLOWED_EMAILS.has(normalized);
+}
+
 /**
  * Hard-enforce the @cheq.one domain. Even though the client uses
  * `hd: cheq.one` in the Google OAuth flow, an attacker could call the
@@ -16,8 +26,8 @@ const CHEQ_DOMAIN = 'cheq.one';
 export const onUserCreate = auth.user().onCreate(async (user) => {
   const email = user.email?.toLowerCase() ?? null;
 
-  if (!email || !email.endsWith(`@${CHEQ_DOMAIN}`)) {
-    logger.warn('Rejecting non-cheq.one account', { uid: user.uid, email });
+  if (!email || !isAllowedEmail(email)) {
+    logger.warn('Rejecting non-allowed account', { uid: user.uid, email });
     await getAuth().deleteUser(user.uid);
     return;
   }

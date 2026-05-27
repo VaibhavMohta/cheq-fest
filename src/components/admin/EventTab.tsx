@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Timestamp, addDoc, deleteDoc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import clsx from 'clsx';
 import { Button } from '@/components/shared/Button';
 import { DatePicker } from '@/components/shared/DatePicker';
 import { eventRef, eventsCol } from '@/lib/db';
+import { storage } from '@/lib/firebase';
 import { useActiveEvent, type EventWithId } from '@/lib/activeEvent';
 import { useRole } from '@/lib/roles';
 import { EVENT_STATUSES, defaultEvent, type EventDoc, type EventStatus } from '@/types/event';
@@ -52,6 +54,24 @@ export function EventTab() {
       // deleting an event simply hides it from the list.
       const snap = await getDoc(eventRef(id));
       if (snap.exists()) await deleteDoc(eventRef(id));
+    },
+  });
+
+  // Upload an event logo to Firebase Storage and persist the public URL on
+  // the event doc. Mirrors the pattern in TeamDetail.tsx.
+  const uploadLogo = useMutation({
+    mutationFn: async (args: { id: string; file: File }) => {
+      const ext = (args.file.name.split('.').pop() ?? 'jpg').toLowerCase();
+      const path = `events/${args.id}/logo.${ext}`;
+      const r = storageRef(storage, path);
+      await uploadBytes(r, args.file, { contentType: args.file.type || 'image/jpeg' });
+      const url = await getDownloadURL(r);
+      await setDoc(eventRef(args.id), { logoUrl: url }, { merge: true });
+      return url;
+    },
+    onSuccess: (url) => {
+      setDraft((d) => (d ? { ...d, logoUrl: url } : d));
+      void qc.invalidateQueries({ queryKey: ['events'] });
     },
   });
 
@@ -199,12 +219,25 @@ export function EventTab() {
             />
           </FormField>
 
-          <FormField label="Logo URL" hint="Storage upload UI lands later.">
-            <TextInput
-              value={draft.logoUrl ?? ''}
-              onChange={(e) => setDraft({ ...draft, logoUrl: e.target.value || null })}
-              placeholder="https://…"
-              type="url"
+          <FormField
+            label="Event Logo"
+            hint="Upload an image (PNG / JPG / SVG, up to ~5 MB) or paste a URL."
+          >
+            <LogoUploader
+              currentUrl={draft.logoUrl ?? null}
+              uploading={uploadLogo.isPending}
+              onPickFile={(file) => uploadLogo.mutate({ id: activeEventId, file })}
+              onUrlChange={(url) =>
+                setDraft({ ...draft, logoUrl: url || null })
+              }
+              onClear={() => setDraft({ ...draft, logoUrl: null })}
+              error={
+                uploadLogo.error
+                  ? uploadLogo.error instanceof Error
+                    ? uploadLogo.error.message
+                    : String(uploadLogo.error)
+                  : null
+              }
             />
           </FormField>
 
@@ -275,6 +308,96 @@ function EventRow({
         >
           Delete
         </button>
+      )}
+    </div>
+  );
+}
+
+function LogoUploader({
+  currentUrl,
+  uploading,
+  onPickFile,
+  onUrlChange,
+  onClear,
+  error,
+}: {
+  currentUrl: string | null;
+  uploading: boolean;
+  onPickFile: (file: File) => void;
+  onUrlChange: (url: string) => void;
+  onClear: () => void;
+  error: string | null;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-3">
+        <div
+          className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-bg"
+          aria-label="Logo preview"
+        >
+          {currentUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={currentUrl} alt="Event logo" className="h-full w-full object-contain" />
+          ) : (
+            <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
+              No logo
+            </span>
+          )}
+        </div>
+        <div className="flex flex-1 flex-col gap-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            className="!w-auto !px-3 !py-1.5 self-start"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            {uploading ? 'Uploading…' : currentUrl ? 'Replace image' : 'Upload image'}
+          </Button>
+          {currentUrl && !uploading && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="self-start font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim hover:text-accent"
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onPickFile(file);
+          // Reset so picking the same file twice still triggers onChange.
+          e.target.value = '';
+        }}
+      />
+
+      <details className="rounded-lg border border-line bg-bg px-3 py-2">
+        <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
+          Or paste a URL
+        </summary>
+        <div className="mt-2">
+          <TextInput
+            value={currentUrl ?? ''}
+            onChange={(e) => onUrlChange(e.target.value)}
+            placeholder="https://…"
+            type="url"
+          />
+        </div>
+      </details>
+
+      {error && (
+        <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-accent">
+          Upload failed: {error}
+        </p>
       )}
     </div>
   );

@@ -91,8 +91,8 @@ function LoginScreen() {
         </p>
         <h1 className="mt-2 font-display text-5xl uppercase">Sign in</h1>
         <p className="mt-3 text-ink-dim">
-          Restricted to <span className="text-accent-2">@cheq.one</span> Google accounts. Guests
-          can browse without signing in.
+          Sign in with an <span className="text-accent-2">@cheq.one</span> Google account, or any
+          email on the approved allow-list. Guests can browse without signing in.
         </p>
       </header>
 

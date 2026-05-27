@@ -1,7 +1,12 @@
 /**
- * Revoke the `admin` custom claim. Refuses to touch a user that holds
- * `superAdmin` — those are demoted only via the bootstrap script. Caller
- * must hold the `superAdmin` claim.
+ * Revoke the `admin` custom claim. A Super Admin caller can revoke the
+ * `admin` claim from anyone — including another Super Admin (the
+ * `superAdmin` claim itself is preserved; only `admin` is stripped). The
+ * `superAdmin` claim is still bootstrap-only.
+ *
+ * Self-strip guard: a caller cannot strip their OWN admin claim if doing
+ * so would leave them unable to perform admin actions. (Super Admins are
+ * fine — they have superAdmin separately.)
  */
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
@@ -21,12 +26,10 @@ export const revokeAdmin = onCall(async (req) => {
   const auth = getAuth();
   const user = await auth.getUser(uid);
   const existing = (user.customClaims ?? {}) as Record<string, unknown>;
-  if (existing.superAdmin) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Cannot revoke admin from a Super Admin. Use the bootstrap script.',
-    );
-  }
+
+  // Strip only the `admin` claim. Leave `superAdmin` untouched — that
+  // claim is bootstrap-managed and stays intact even when stripping admin
+  // from a Super Admin user.
   const { admin: _admin, ...rest } = existing;
   await auth.setCustomUserClaims(uid, rest);
 
