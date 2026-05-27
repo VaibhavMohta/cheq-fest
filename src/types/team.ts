@@ -101,6 +101,61 @@ export function teamLabelFor(teamId: string | null | undefined): string {
   return teamId;
 }
 
+/**
+ * Whether a stored team color reads as "light" — high enough luminance
+ * that a dark background should sit behind text painted in this color.
+ * Returns true for unknown / legacy values so the default (dark) page
+ * surface still applies. Uses Rec. 709 luminance on the raw RGB.
+ */
+export function isLightTeamColor(value: string | null | undefined): boolean {
+  if (!value || !value.startsWith('#')) return true;
+  const hex = value.replace('#', '');
+  if (hex.length !== 6) return true;
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  if ([r, g, b].some((n) => Number.isNaN(n))) return true;
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return lum > 0.55;
+}
+
+/**
+ * Pick a box-background that contrasts with the team color so the team's
+ * boundary, name, and logo (all painted in the team color) stay legible.
+ *
+ * - Light team color (white, lime, yellow, …) → the app's default dark
+ *   card surface, lightly tinted with the team color. Dark page baseline
+ *   means the bright team-color text + logo already pop.
+ * - Dark team color (black, navy, slate, maroon, …) → an off-white
+ *   surface (the same `--ink` we use for body text), tinted with the
+ *   team color. Stands out from the rest of the dark UI deliberately —
+ *   that's the point: the dark-on-white card is what makes the dark
+ *   team identity readable.
+ */
+export function teamSurfaceFor(value: string | null | undefined): string {
+  const teamColor = colorVarFor(value);
+  if (isLightTeamColor(value)) {
+    return `color-mix(in oklab, ${teamColor} 6%, var(--bg-card))`;
+  }
+  return `color-mix(in oklab, ${teamColor} 22%, var(--ink))`;
+}
+
+/**
+ * Companion to {@link teamSurfaceFor}. Returns a same-toned but slightly
+ * darker/lighter gradient endpoint so heroes that want a colour shift
+ * (TeamDetail, TeamMgmt) still get one without losing contrast.
+ */
+export function teamSurfaceGradient(value: string | null | undefined): string {
+  const teamColor = colorVarFor(value);
+  if (isLightTeamColor(value)) {
+    // Dark base, brighter team-coloured tail. Existing aesthetic.
+    return `linear-gradient(135deg, ${teamColor}, #0f0e0c)`;
+  }
+  // Dark team: light card with a stronger team-tinted band. Keeps the
+  // dynamic gradient feel without collapsing into a single dark hue.
+  return `linear-gradient(135deg, color-mix(in oklab, ${teamColor} 35%, var(--ink)) 0%, color-mix(in oklab, ${teamColor} 12%, var(--ink)) 100%)`;
+}
+
 /** First two letters of the team name, uppercased. */
 export function flagInitials(name: string | null | undefined): string {
   if (!name) return '??';

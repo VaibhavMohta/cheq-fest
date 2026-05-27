@@ -7,7 +7,14 @@ import { Avatar } from '@/components/shared/Avatar';
 import { Button } from '@/components/shared/Button';
 import { teamRef, teamsCol } from '@/lib/db';
 import { storage } from '@/lib/firebase';
-import { TEAM_PALETTE, colorVarFor, colorLabelFor, flagInitials } from '@/types/team';
+import {
+  TEAM_PALETTE,
+  colorVarFor,
+  colorLabelFor,
+  flagInitials,
+  isLightTeamColor,
+  teamSurfaceFor,
+} from '@/types/team';
 import { suggestTeamColor, type ColorSuggestion } from '@/lib/suggestTeamColor';
 import type { TeamDoc } from '@/types/player';
 import { FormField, TextInput } from './FormField';
@@ -412,31 +419,55 @@ function CreateTeamForm({
 
 function TeamCard({ team, onOpen }: { team: TeamWithId; onOpen: () => void }) {
   const color = colorVarFor(team.color);
+  const surface = teamSurfaceFor(team.color);
+  // When the team color is dark we paint the card on a light surface — in
+  // that mode the default `text-ink` (off-white) for the team name would
+  // disappear. Switch to a near-black ink in that branch so we contrast
+  // against the light surface.
+  const lightSurface = !isLightTeamColor(team.color);
   return (
     <button
       type="button"
       onClick={onOpen}
       className="flex flex-col items-start gap-1 rounded-2xl border p-3 text-left transition active:scale-[0.98]"
-      style={{ borderColor: 'color-mix(in oklab, currentColor 40%, transparent)', color }}
+      style={{
+        background: surface,
+        borderColor: 'color-mix(in oklab, currentColor 40%, transparent)',
+        color,
+      }}
     >
       {team.logoUrl ? (
         <Avatar
           name={team.name}
           adminPhotoUrl={team.logoUrl}
           size={40}
-          surfaceColor="var(--bg-card)"
+          surfaceColor={surface}
         />
       ) : (
         <span
           aria-hidden
-          className="grid h-10 w-10 place-items-center rounded-full font-display text-sm text-bg"
-          style={{ background: color }}
+          className="grid h-10 w-10 place-items-center rounded-full font-display text-sm"
+          style={{
+            background: color,
+            // The flag-initial inside the avatar circle is painted as
+            // "background of the card" so it reads against the team
+            // color, independent of the card surface choice.
+            color: lightSurface ? 'var(--ink)' : 'var(--bg)',
+          }}
         >
           {flagInitials(team.name)}
         </span>
       )}
-      <span className="mt-1 font-display text-base uppercase text-ink">{team.name}</span>
-      <span className="font-mono text-[10px] uppercase tracking-[0.06em] opacity-70">
+      <span
+        className="mt-1 font-display text-base uppercase"
+        // Team name is the headline — keep it in a contrasting "ink"
+        // tone (off-white on dark surfaces, near-black on light ones)
+        // rather than the team color, so visibility is guaranteed.
+        style={{ color: lightSurface ? 'var(--bg)' : 'var(--ink)' }}
+      >
+        {team.name}
+      </span>
+      <span className="font-mono text-[10px] uppercase tracking-[0.06em] opacity-80">
         {team.members.length} player{team.members.length === 1 ? '' : 's'}
         {team.groupCaptainEmail ? ' · GC ✓' : ' · No GC'}
       </span>

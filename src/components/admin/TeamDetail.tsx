@@ -15,7 +15,12 @@ import {
   usersCol,
 } from '@/lib/db';
 import { storage } from '@/lib/firebase';
-import { colorVarFor, flagInitials } from '@/types/team';
+import {
+  colorVarFor,
+  flagInitials,
+  isLightTeamColor,
+  teamSurfaceGradient,
+} from '@/types/team';
 import type { TeamDoc } from '@/types/player';
 import type { PersonRow as DirectoryPersonRow } from '@/lib/playerDirectory';
 import { FormField } from './FormField';
@@ -321,22 +326,38 @@ export function TeamDetail({ eventId, teamId, onClose }: Props) {
         ← All teams
       </button>
 
-      {/* Hero */}
+      {/* Hero — when the team colour is dark, the gradient + ink colour
+          flip to a light surface with dark text so the team identity
+          stays readable. Light-coloured teams keep the original dark
+          gradient. */}
       <section
-        className="relative overflow-hidden rounded-3xl p-5 text-bg"
-        style={{ background: `linear-gradient(135deg, ${color}, #0f0e0c)` }}
+        className="relative overflow-hidden rounded-3xl p-5"
+        style={{
+          background: teamSurfaceGradient(t.color),
+          color: isLightTeamColor(t.color) ? 'var(--bg)' : color,
+        }}
       >
         <div className="flex items-center gap-3">
           {t.logoUrl ? (
             <img
               src={t.logoUrl}
               alt=""
-              className="h-14 w-14 rounded-full border-2 border-bg/30 object-cover"
+              className="h-14 w-14 rounded-full border-2 object-cover"
+              style={{
+                borderColor: isLightTeamColor(t.color)
+                  ? 'color-mix(in oklab, var(--bg) 30%, transparent)'
+                  : 'color-mix(in oklab, var(--ink) 25%, transparent)',
+              }}
             />
           ) : (
             <span
               aria-hidden
-              className="grid h-14 w-14 place-items-center rounded-full border-2 border-bg/30 font-display text-lg"
+              className="grid h-14 w-14 place-items-center rounded-full border-2 font-display text-lg"
+              style={{
+                borderColor: isLightTeamColor(t.color)
+                  ? 'color-mix(in oklab, var(--bg) 30%, transparent)'
+                  : 'color-mix(in oklab, var(--ink) 25%, transparent)',
+              }}
             >
               {flagInitials(t.name)}
             </span>

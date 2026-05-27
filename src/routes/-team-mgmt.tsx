@@ -15,7 +15,12 @@ import {
   teamRef,
   type RosterDoc,
 } from '@/lib/db';
-import { colorVarFor, flagInitials } from '@/types/team';
+import {
+  colorVarFor,
+  flagInitials,
+  isLightTeamColor,
+  teamSurfaceGradient,
+} from '@/types/team';
 import type { TeamDoc } from '@/types/player';
 import type { SportDoc } from '@/types/sport';
 
@@ -112,22 +117,36 @@ function TeamBlock({ eventId, teamId }: { eventId: string; teamId: string }) {
 
   return (
     <section className="flex flex-col gap-3">
-      {/* Hero */}
+      {/* Hero — light surface for dark team colours, dark gradient for
+          bright ones. Avatar circle border + ink adapt to match. */}
       <div
-        className="mx-5 rounded-3xl p-5 text-bg"
-        style={{ background: `linear-gradient(135deg, ${color}, #0f0e0c)` }}
+        className="mx-5 rounded-3xl p-5"
+        style={{
+          background: teamSurfaceGradient(team.color),
+          color: isLightTeamColor(team.color) ? 'var(--bg)' : color,
+        }}
       >
         <div className="flex items-center gap-3">
           {team.logoUrl ? (
             <img
               src={team.logoUrl}
               alt=""
-              className="h-14 w-14 rounded-full border-2 border-bg/30 object-cover"
+              className="h-14 w-14 rounded-full border-2 object-cover"
+              style={{
+                borderColor: isLightTeamColor(team.color)
+                  ? 'color-mix(in oklab, var(--bg) 30%, transparent)'
+                  : 'color-mix(in oklab, var(--ink) 25%, transparent)',
+              }}
             />
           ) : (
             <span
               aria-hidden
-              className="grid h-14 w-14 place-items-center rounded-full border-2 border-bg/30 font-display text-lg"
+              className="grid h-14 w-14 place-items-center rounded-full border-2 font-display text-lg"
+              style={{
+                borderColor: isLightTeamColor(team.color)
+                  ? 'color-mix(in oklab, var(--bg) 30%, transparent)'
+                  : 'color-mix(in oklab, var(--ink) 25%, transparent)',
+              }}
             >
               {flagInitials(team.name)}
             </span>
