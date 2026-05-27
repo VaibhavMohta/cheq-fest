@@ -347,7 +347,9 @@ async function callAnthropic(
 ): Promise<ParsedRulebook> {
   const client = new Anthropic({ apiKey });
 
-  const response = await client.messages.create({
+  let response;
+  try {
+    response = await client.messages.create({
     model: MODEL,
     max_tokens: 8_000,
     // Structured extraction doesn't need thinking — the JSON schema enforces
@@ -376,7 +378,23 @@ async function callAnthropic(
         content: `Parse this rulebook:\n\n${rulebookText}`,
       },
     ],
-  });
+    });
+  } catch (err) {
+    // Anthropic SDK throws APIError subclasses; surface enough detail
+    // for the admin to see what actually broke instead of a bare 500.
+    const message = err instanceof Error ? err.message : String(err);
+    const anyErr = err as { status?: number; error?: { error?: { message?: string } } };
+    const apiMessage = anyErr?.error?.error?.message;
+    logger.error('Anthropic API call failed', {
+      status: anyErr?.status,
+      apiMessage,
+      message,
+    });
+    throw new HttpsError(
+      'internal',
+      `Anthropic API error: ${apiMessage ?? message}`,
+    );
+  }
 
   const inputTokens = response.usage.input_tokens;
   const outputTokens = response.usage.output_tokens;
@@ -397,6 +415,7 @@ async function callAnthropic(
     cacheCreationTokens,
     costUsd,
     stopReason: response.stop_reason,
+    contentBlockTypes: response.content.map((b) => b.type),
   });
 
   // Fire-and-forget ledger write. Failure to log usage shouldn't fail the
@@ -424,13 +443,38 @@ async function callAnthropic(
   }
   const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
   if (!textBlock) {
-    throw new HttpsError('internal', 'No text block in response.');
+    logger.error('No text block in response', {
+      stopReason: response.stop_reason,
+      contentBlockTypes: response.content.map((b) => b.type),
+    });
+    throw new HttpsError(
+      'internal',
+      `No text block in model response (stop=${response.stop_reason}, blocks=${response.content
+        .map((b) => b.type)
+        .join(',')}).`,
+    );
   }
+  // Some Sonnet variants wrap structured output in markdown code fences
+  // even when output_config.format is set. Strip a leading ```json /
+  // trailing ``` before parsing so a stray fence doesn't trip JSON.parse.
+  const raw = textBlock.text.trim();
+  const cleaned = raw
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim();
   try {
-    return JSON.parse(textBlock.text) as ParsedRulebook;
+    return JSON.parse(cleaned) as ParsedRulebook;
   } catch (err) {
-    logger.error('Could not parse model output as JSON', { text: textBlock.text });
-    throw new HttpsError('internal', 'Model returned invalid JSON.');
+    logger.error('Could not parse model output as JSON', {
+      rawLength: raw.length,
+      preview: raw.slice(0, 400),
+      stopReason: response.stop_reason,
+      parseError: err instanceof Error ? err.message : String(err),
+    });
+    throw new HttpsError(
+      'internal',
+      `Model returned invalid JSON (stop=${response.stop_reason}, len=${raw.length}, preview=${raw.slice(0, 200).replace(/[\r\n]+/g, ' ')}).`,
+    );
   }
 }
 
