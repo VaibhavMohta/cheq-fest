@@ -9,6 +9,7 @@ import { BackIcon } from '@/components/shared/icons';
 import { useActiveEvent } from '@/lib/activeEvent';
 import { teamRef } from '@/lib/db';
 import { colorVarFor } from '@/types/team';
+import { displayEmail } from '@/lib/syntheticEmail';
 import type { TeamDoc } from '@/types/player';
 
 export const Route = createFileRoute('/teams/$teamId')({
@@ -103,7 +104,7 @@ function TeamDetailScreen() {
         <SectionTitle>Captains</SectionTitle>
         {team.groupCaptainEmail ? (
           <p className="mx-5 rounded-xl border border-line bg-bg-card px-3 py-2.5 font-mono text-[11px] uppercase tracking-[0.06em] text-ink-dim">
-            Group Captain · {team.groupCaptainEmail}
+            Group Captain · {displayEmail(team.groupCaptainEmail)}
           </p>
         ) : (
           <EmptyState
@@ -125,7 +126,7 @@ function TeamDetailScreen() {
                 key={email}
                 className="rounded-xl border border-line bg-bg-card px-3 py-2 font-mono text-[11px] tracking-[0.06em] text-ink"
               >
-                {email}
+                {displayEmail(email)}
               </li>
             ))}
           </ul>

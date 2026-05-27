@@ -15,6 +15,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/shared/Button';
 import { parsePlayersCsv } from '@/lib/csv';
 import { normalizeEmail } from '@/lib/db';
+import { makeSyntheticEmail } from '@/lib/syntheticEmail';
 import { FormField, TextArea, TextInput } from './FormField';
 
 export type ImportedRow = {
@@ -128,7 +129,14 @@ export function ManualAdd({
         {heading}
       </h2>
       <div className="grid grid-cols-1 gap-2">
-        <FormField label="Email">
+        <FormField
+          label="Email (optional)"
+          hint={
+            email.trim()
+              ? undefined
+              : 'Leave blank for players who don’t have an email yet — they’ll show as "No email" in the picker and can’t be promoted to admin.'
+          }
+        >
           <TextInput
             type="email"
             value={email}
@@ -155,17 +163,36 @@ export function ManualAdd({
         type="button"
         disabled={pending}
         onClick={() => {
-          const e = normalizeEmail(email);
-          if (!e || !e.includes('@')) {
-            setError('Enter a valid email.');
+          const displayName = name.trim();
+          if (!displayName) {
+            setError('Display name is required.');
             return;
           }
-          if (existingEmails.has(e)) {
-            setError(`${e} is already in the list.`);
-            return;
+          const typedEmail = normalizeEmail(email);
+          let finalEmail: string;
+          if (typedEmail.length === 0) {
+            // No email provided — mint a synthetic id in the
+            // @no-email.local namespace so the rest of the system keeps
+            // working (membership, captaincy etc. are all email-keyed).
+            // The UI renders these as "No email" via displayEmail().
+            finalEmail = makeSyntheticEmail(displayName);
+          } else {
+            if (!typedEmail.includes('@')) {
+              setError('Enter a valid email — or leave it blank.');
+              return;
+            }
+            if (existingEmails.has(typedEmail)) {
+              setError(`${typedEmail} is already in the list.`);
+              return;
+            }
+            finalEmail = typedEmail;
           }
           setError(null);
-          onAdd({ email: e, name: name.trim() || e.split('@')[0]!, phone: phone.trim() || null });
+          onAdd({
+            email: finalEmail,
+            name: displayName,
+            phone: phone.trim() || null,
+          });
           setEmail('');
           setName('');
           setPhone('');

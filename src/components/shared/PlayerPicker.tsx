@@ -28,6 +28,7 @@ import { useState } from 'react';
 import clsx from 'clsx';
 import { Avatar } from './Avatar';
 import { usePlayerSearch, type PersonRow } from '@/lib/playerDirectory';
+import { displayEmail } from '@/lib/syntheticEmail';
 
 type Mode = 'multi' | 'single';
 
@@ -322,7 +323,7 @@ function DraggableRow({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-bold">{row.name}</p>
         <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
-          {row.email}
+          {displayEmail(row.email)}
         </p>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-0.5">

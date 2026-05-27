@@ -9,6 +9,7 @@ import {
   usersCol,
 } from '@/lib/db';
 import { useAuth } from '@/lib/auth';
+import { displayEmail } from '@/lib/syntheticEmail';
 import { CsvImporter, ManualAdd } from './PlayerImport';
 import { RequireEvent } from './RequireEvent';
 
@@ -169,7 +170,7 @@ function PlayerRow({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-bold">{name}</p>
         <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
-          {email}
+          {displayEmail(email)}
         </p>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">

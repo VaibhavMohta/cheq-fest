@@ -11,6 +11,7 @@ import { useRole } from '@/lib/roles';
 import { useAuth } from '@/lib/auth';
 import { useAllEventPlayers, type PersonRow } from '@/lib/playerDirectory';
 import { emailDocId, stagedPlayersCol, usersCol } from '@/lib/db';
+import { displayEmail } from '@/lib/syntheticEmail';
 import { grantAdmin, revokeAdmin } from '@/lib/manageAdmins';
 import { CsvImporter, ManualAdd, type ImportedRow } from '@/components/admin/PlayerImport';
 import type { UserDoc } from '@/types/player';
@@ -167,7 +168,7 @@ function ManageAdminsScreen() {
                         {u.displayName ?? u.email}
                       </p>
                       <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
-                        {u.email}
+                        {displayEmail(u.email)}
                       </p>
                     </div>
                     {isSuper && (

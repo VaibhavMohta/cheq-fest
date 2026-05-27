@@ -15,6 +15,7 @@ import {
   teamRef,
   type RosterDoc,
 } from '@/lib/db';
+import { displayEmail } from '@/lib/syntheticEmail';
 import {
   colorVarFor,
   flagInitials,
@@ -182,7 +183,7 @@ function TeamBlock({ eventId, teamId }: { eventId: string; teamId: string }) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold">{p.name}</p>
                   <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
-                    {p.email}
+                    {displayEmail(p.email)}
                   </p>
                 </div>
                 {!p.isClaimed && (
@@ -213,7 +214,7 @@ function TeamBlock({ eventId, teamId }: { eventId: string; teamId: string }) {
           Captains
         </h3>
         <p className="rounded-xl border border-line bg-bg-card px-3 py-2.5 font-mono text-[11px] tracking-[0.06em] text-ink">
-          Group · <span className="text-ink-dim">{team.groupCaptainEmail ?? '—'}</span>
+          Group · <span className="text-ink-dim">{team.groupCaptainEmail ? displayEmail(team.groupCaptainEmail) : '—'}</span>
         </p>
         <ViceCaptainPicker
           eventId={eventId}
@@ -290,7 +291,7 @@ function ViceCaptainPicker({
         className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left font-mono text-[11px] tracking-[0.06em] text-ink"
       >
         <span>
-          Vice · <span className="text-ink-dim">{currentEmail ?? 'Not assigned'}</span>
+          Vice · <span className="text-ink-dim">{currentEmail ? displayEmail(currentEmail) : 'Not assigned'}</span>
         </span>
         <span
           className={
@@ -475,7 +476,7 @@ function SportCaptainRow({
           </p>
           <p className="mt-0.5 font-mono text-[10px] tracking-[0.06em] text-ink-dim">
             {currentEmail
-              ? `Captain · ${currentEmail}`
+              ? `Captain · ${displayEmail(currentEmail)}`
               : 'No Sport Captain assigned'}
           </p>
         </div>

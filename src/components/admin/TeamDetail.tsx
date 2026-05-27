@@ -23,6 +23,7 @@ import {
 } from '@/types/team';
 import type { TeamDoc } from '@/types/player';
 import type { PersonRow as DirectoryPersonRow } from '@/lib/playerDirectory';
+import { displayEmail } from '@/lib/syntheticEmail';
 import { FormField } from './FormField';
 
 const teamsQk = (eventId: string) => ['admin', 'teams', eventId] as const;
@@ -445,7 +446,7 @@ export function TeamDetail({ eventId, teamId, onClose }: Props) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold">{p.name}</p>
                   <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
-                    {p.email}
+                    {displayEmail(p.email)}
                   </p>
                 </div>
                 {!p.isClaimed && (
@@ -533,7 +534,7 @@ export function TeamDetail({ eventId, teamId, onClose }: Props) {
                       {p.name}
                     </p>
                     <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-mute">
-                      {p.email}
+                      {displayEmail(p.email)}
                     </p>
                   </div>
                   {onThisTeam && (
