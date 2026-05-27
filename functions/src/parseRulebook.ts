@@ -66,164 +66,15 @@ function computeCostUsd(args: {
   return Math.round(cost * 1_000_000) / 1_000_000; // 6 decimal places
 }
 
-// JSON schema — guarantees the response shape via output_config.format.
-// Anything Claude returns will validate against this; no JSON.parse error path.
-const CONFIDENCE_ENUM = { type: 'string', enum: ['high', 'low', 'missing'] } as const;
-
-const RULEBOOK_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['sports'],
-  properties: {
-    sports: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: [
-          'name',
-          'arenaType',
-          'playersOnField',
-          'substitutes',
-          'duration',
-          'format',
-          'points',
-          'trackableEvents',
-          'confidence',
-        ],
-        properties: {
-          // ── Core (always required) ──────────────────────────────────
-          name: { type: 'string', description: 'Sport name, e.g. "Cricket" or "Badminton — Mixed Doubles" for a variant.' },
-          arenaType: {
-            type: 'string',
-            enum: ['field', 'court', 'pitch', 'board', 'table', 'rope', 'track'],
-            description:
-              'field=open multi-player; pitch=football-style; court=badminton/pickleball; table=TT/pool; rope=tug-of-war; track=relay/athletics; board=chess.',
-          },
-          playersOnField: { type: 'integer', description: 'Players per side at one time.' },
-          substitutes: { type: 'integer', description: 'Max substitutes per side.' },
-          duration: { type: 'string' },
-          format: { type: 'string' },
-          points: {
-            type: 'object',
-            additionalProperties: false,
-            required: ['win', 'draw', 'loss'],
-            properties: {
-              win: { type: 'number' },
-              draw: { type: 'number' },
-              loss: { type: 'number' },
-            },
-          },
-          trackableEvents: {
-            type: 'array',
-            description:
-              'Per-sport ref-console events. Free-form strings — use standard vocab when it fits (goal, run, wicket, foul, fault, sub, etc.) and custom names like "run-4", "frame-start", "pull-end" when needed.',
-            items: { type: 'string' },
-          },
-
-          // ── Optional richer fields (omit when rulebook is silent) ───
-          category: {
-            type: 'string',
-            enum: ['team', 'racquet', 'cue-sport'],
-            description: 'Broad bucket; omit if unclear.',
-          },
-          parentCategory: {
-            type: 'string',
-            description:
-              'Display group for variants — e.g. "Badminton" for "Badminton — Mixed Doubles". Omit for non-variant sports.',
-          },
-          playersToRegister: {
-            type: 'integer',
-            description: 'Total players to register (incl. subs). Falls back to playersOnField + substitutes.',
-          },
-          substitutionRules: { type: 'string' },
-          genderRequirement: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              mandatoryMales: { type: 'integer' },
-              mandatoryFemales: { type: 'integer' },
-              notes: { type: 'string' },
-            },
-          },
-          overSchedule: { type: 'string', description: 'Cricket only, e.g. "2+2+1+1".' },
-          officials: { type: 'string' },
-          scoringRules: { type: 'array', items: { type: 'string' } },
-          bowlingRules: { type: 'array', items: { type: 'string' }, description: 'Cricket only.' },
-          fieldingRules: { type: 'array', items: { type: 'string' }, description: 'Cricket only.' },
-          gameplayRules: { type: 'array', items: { type: 'string' } },
-          faultsList: { type: 'array', items: { type: 'string' } },
-          tieBreakerRules: { type: 'array', items: { type: 'string' } },
-          houseRules: { type: 'string' },
-          stateFields: {
-            type: 'array',
-            description: 'Live-match counters this sport tracks (e.g. ["scoreA","scoreB","overs","balls"]).',
-            items: { type: 'string' },
-          },
-
-          // ── Confidence map (every field present; "missing" when silent) ─
-          // Anthropic structured-output caps optional properties per
-          // schema. Marking every confidence field required is a no-op
-          // semantically — the model already emits "missing" when the
-          // rulebook is silent — and frees the optional budget for the
-          // sport-level fields above.
-          confidence: {
-            type: 'object',
-            additionalProperties: false,
-            required: [
-              'playersOnField',
-              'substitutes',
-              'duration',
-              'format',
-              'points',
-              'trackableEvents',
-              'arenaType',
-              'category',
-              'parentCategory',
-              'playersToRegister',
-              'substitutionRules',
-              'genderRequirement',
-              'overSchedule',
-              'officials',
-              'scoringRules',
-              'bowlingRules',
-              'fieldingRules',
-              'gameplayRules',
-              'faultsList',
-              'tieBreakerRules',
-              'houseRules',
-              'stateFields',
-            ],
-            properties: {
-              playersOnField: CONFIDENCE_ENUM,
-              substitutes: CONFIDENCE_ENUM,
-              duration: CONFIDENCE_ENUM,
-              format: CONFIDENCE_ENUM,
-              points: CONFIDENCE_ENUM,
-              trackableEvents: CONFIDENCE_ENUM,
-              arenaType: CONFIDENCE_ENUM,
-              category: CONFIDENCE_ENUM,
-              parentCategory: CONFIDENCE_ENUM,
-              playersToRegister: CONFIDENCE_ENUM,
-              substitutionRules: CONFIDENCE_ENUM,
-              genderRequirement: CONFIDENCE_ENUM,
-              overSchedule: CONFIDENCE_ENUM,
-              officials: CONFIDENCE_ENUM,
-              scoringRules: CONFIDENCE_ENUM,
-              bowlingRules: CONFIDENCE_ENUM,
-              fieldingRules: CONFIDENCE_ENUM,
-              gameplayRules: CONFIDENCE_ENUM,
-              faultsList: CONFIDENCE_ENUM,
-              tieBreakerRules: CONFIDENCE_ENUM,
-              houseRules: CONFIDENCE_ENUM,
-              stateFields: CONFIDENCE_ENUM,
-            },
-          },
-        },
-      },
-    },
-  },
-} as const;
+// NOTE — we used to pass `output_config.format = json_schema` here for
+// API-enforced JSON output. With 22 confidence fields + 22 sport fields
+// nested under an array, Anthropic's grammar compiler started timing out
+// ("Grammar compilation timed out"). The schema itself is fine — the
+// compilation step is what's slow. So we now switched to prompt-only
+// JSON: the system prompt + user message describe the shape the model
+// should emit, we strip any markdown fences, and parse the result with
+// tolerance for missing fields. The user-facing response shape hasn't
+// changed; only the enforcement mechanism did.
 
 const SYSTEM_PROMPT = `You parse company sports-fest rulebooks into structured JSON.
 
@@ -350,34 +201,62 @@ async function callAnthropic(
   let response;
   try {
     response = await client.messages.create({
-    model: MODEL,
-    max_tokens: 8_000,
-    // Structured extraction doesn't need thinking — the JSON schema enforces
-    // output shape, and `effort: low` keeps latency under the 70s callable
-    // client timeout. Bump these if extraction quality drops on real inputs.
-    thinking: { type: 'disabled' },
-    output_config: {
-      effort: 'low',
-      format: {
-        type: 'json_schema',
-        schema: RULEBOOK_SCHEMA as unknown as Record<string, unknown>,
-      },
-    },
-    // System prompt + schema description is identical across every call →
-    // cache it. The rulebook text in the user turn is volatile.
-    system: [
-      {
-        type: 'text',
-        text: SYSTEM_PROMPT,
-        cache_control: { type: 'ephemeral' },
-      },
-    ],
-    messages: [
-      {
-        role: 'user',
-        content: `Parse this rulebook:\n\n${rulebookText}`,
-      },
-    ],
+      model: MODEL,
+      max_tokens: 8_000,
+      // We previously used `output_config.format = json_schema` for
+      // guaranteed-shape output. With 22 confidence fields + 22 sport
+      // fields + a few nested objects, Anthropic's grammar compiler was
+      // timing out ("Grammar compilation timed out"). Switching to
+      // prompt-only JSON: the system prompt tells the model to emit a
+      // JSON object matching a documented shape; we parse + tolerate
+      // missing fields downstream. Markdown code-fence stripping
+      // already in place if the model wraps the JSON.
+      thinking: { type: 'disabled' },
+      system: [
+        {
+          type: 'text',
+          text: SYSTEM_PROMPT,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
+      messages: [
+        {
+          role: 'user',
+          content: `Parse this rulebook and respond with ONLY a JSON object — no preamble, no markdown fences, no commentary. The object must look like:
+
+{
+  "sports": [
+    {
+      "name": "Football",
+      "arenaType": "pitch",
+      "playersOnField": 5,
+      "substitutes": 3,
+      "duration": "2 × 15 min",
+      "format": "5-a-side",
+      "points": { "win": 8, "draw": 3, "loss": 0 },
+      "trackableEvents": ["goal","yellow","red","foul","sub"],
+      "confidence": { "playersOnField": "high", ... },
+      // optional fields — include only when the rulebook supports them:
+      "category": "team",
+      "parentCategory": "Football",
+      "playersToRegister": 8,
+      "substitutionRules": "...",
+      "scoringRules": ["..."],
+      "faultsList": ["..."],
+      "tieBreakerRules": ["..."],
+      "houseRules": "...",
+      "overSchedule": "...",
+      "officials": "...",
+      "stateFields": ["scoreA","scoreB","clockSeconds"]
+    }
+  ]
+}
+
+Rulebook text:
+
+${rulebookText}`,
+        },
+      ],
     });
   } catch (err) {
     // Anthropic SDK throws APIError subclasses; surface enough detail
