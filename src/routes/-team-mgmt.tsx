@@ -221,11 +221,17 @@ function TeamBlock({ eventId, teamId }: { eventId: string; teamId: string }) {
           roster={roster}
           currentEmail={team.viceCaptainEmail}
           groupCaptainEmail={team.groupCaptainEmail}
+          teamColor={team.color}
         />
       </div>
 
       {/* Sport Captains */}
-      <SportCaptainsSection eventId={eventId} teamId={teamId} roster={roster} />
+      <SportCaptainsSection
+        eventId={eventId}
+        teamId={teamId}
+        roster={roster}
+        teamColor={team.color}
+      />
     </section>
   );
 }
@@ -236,12 +242,14 @@ function ViceCaptainPicker({
   roster,
   currentEmail,
   groupCaptainEmail,
+  teamColor,
 }: {
   eventId: string;
   teamId: string;
   roster: PersonRow[];
   currentEmail: string | null;
   groupCaptainEmail: string | null;
+  teamColor: string;
 }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -311,6 +319,7 @@ function ViceCaptainPicker({
               }}
               searchPlaceholder="Search vice captain…"
               emptySelectedLabel="No Vice Captain picked"
+              teamColor={teamColor}
             />
           )}
         </div>
@@ -323,10 +332,12 @@ function SportCaptainsSection({
   eventId,
   teamId,
   roster,
+  teamColor,
 }: {
   eventId: string;
   teamId: string;
   roster: PersonRow[];
+  teamColor: string;
 }) {
   const qc = useQueryClient();
 
@@ -419,6 +430,7 @@ function SportCaptainsSection({
               setSportCaptain.variables?.sportId === sport.id
             }
             onAssign={(email) => setSportCaptain.mutate({ sportId: sport.id, email })}
+            teamColor={teamColor}
           />
         ))}
       </div>
@@ -432,12 +444,14 @@ function SportCaptainRow({
   currentEmail,
   saving,
   onAssign,
+  teamColor,
 }: {
   sport: SportDoc & { id: string };
   roster: PersonRow[];
   currentEmail: string | null;
   saving: boolean;
   onAssign: (email: string | null) => void;
+  teamColor: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -493,6 +507,7 @@ function SportCaptainRow({
                 setOpen(false);
               }}
               searchPlaceholder={`Search ${sport.name} captain…`}
+              teamColor={teamColor}
               emptySelectedLabel="No Sport Captain picked"
             />
           )}

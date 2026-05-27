@@ -161,7 +161,12 @@ const RULEBOOK_SCHEMA = {
             items: { type: 'string' },
           },
 
-          // ── Confidence map (covers every field above) ───────────────
+          // ── Confidence map (every field present; "missing" when silent) ─
+          // Anthropic structured-output caps optional properties per
+          // schema. Marking every confidence field required is a no-op
+          // semantically — the model already emits "missing" when the
+          // rulebook is silent — and frees the optional budget for the
+          // sport-level fields above.
           confidence: {
             type: 'object',
             additionalProperties: false,
@@ -173,6 +178,21 @@ const RULEBOOK_SCHEMA = {
               'points',
               'trackableEvents',
               'arenaType',
+              'category',
+              'parentCategory',
+              'playersToRegister',
+              'substitutionRules',
+              'genderRequirement',
+              'overSchedule',
+              'officials',
+              'scoringRules',
+              'bowlingRules',
+              'fieldingRules',
+              'gameplayRules',
+              'faultsList',
+              'tieBreakerRules',
+              'houseRules',
+              'stateFields',
             ],
             properties: {
               playersOnField: CONFIDENCE_ENUM,

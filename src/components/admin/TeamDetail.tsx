@@ -395,6 +395,7 @@ export function TeamDetail({ eventId, teamId, onClose }: Props) {
                 onChange={(next) => setGroupCaptain.mutate(next[0]?.email.toLowerCase() ?? null)}
                 emptySelectedLabel="No Group Captain yet"
                 searchPlaceholder="Search team members…"
+                teamColor={t.color}
               />
             );
           })()

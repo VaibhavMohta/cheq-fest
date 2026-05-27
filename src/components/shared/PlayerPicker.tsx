@@ -43,6 +43,14 @@ type Props = {
   emptySelectedLabel?: string;
   /** Override the search input placeholder. */
   searchPlaceholder?: string;
+  /**
+   * Team colour to tint each row's avatar with — pass `team.color` from the
+   * caller. When set, every row's circle uses this colour (matching the
+   * team logo treatment elsewhere); when omitted the avatars default to
+   * neutral muted grey, suitable for cross-team pickers (referee
+   * assignment, manage admins).
+   */
+  teamColor?: string;
 };
 
 const AVAILABLE_ZONE = 'available';
@@ -57,6 +65,7 @@ export function PlayerPicker({
   emptyAvailableLabel = 'No matching players.',
   emptySelectedLabel = 'Nothing selected yet.',
   searchPlaceholder = 'Search by name or email…',
+  teamColor,
 }: Props) {
   const { search, setSearch, filtered, matchCount } = usePlayerSearch(available);
 
@@ -135,6 +144,7 @@ export function PlayerPicker({
           rowWarning={rowWarning}
           emptyLabel={emptySelectedLabel}
           mode={mode}
+          teamColor={teamColor}
         />
 
         {/* Available list */}
@@ -143,13 +153,19 @@ export function PlayerPicker({
           onAdd={moveToSelected}
           rowWarning={rowWarning}
           emptyLabel={emptyAvailableLabel}
+          teamColor={teamColor}
         />
       </div>
 
       <DragOverlay>
         {activeRow && (
           <div className="flex items-center gap-2 rounded-xl border border-accent bg-bg-card px-3 py-2 shadow-xl">
-            <Avatar name={activeRow.name} size={28} surfaceColor="var(--bg-card)" />
+            <Avatar
+              name={activeRow.name}
+              size={28}
+              teamId={teamColor}
+              surfaceColor="var(--bg-card)"
+            />
             <span className="font-display text-sm uppercase tracking-[0.04em]">
               {activeRow.name}
             </span>
@@ -166,12 +182,14 @@ function SelectedZone({
   rowWarning,
   emptyLabel,
   mode,
+  teamColor,
 }: {
   rows: PersonRow[];
   onRemove: (p: PersonRow) => void;
   rowWarning?: (p: PersonRow) => string | null;
   emptyLabel: string;
   mode: Mode;
+  teamColor?: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: SELECTED_ZONE });
   return (
@@ -198,6 +216,7 @@ function SelectedZone({
               role="selected"
               warning={rowWarning?.(p) ?? null}
               onTap={() => onRemove(p)}
+              teamColor={teamColor}
             />
           ))
         )}
@@ -211,11 +230,13 @@ function AvailableZone({
   onAdd,
   rowWarning,
   emptyLabel,
+  teamColor,
 }: {
   rows: PersonRow[];
   onAdd: (p: PersonRow) => void;
   rowWarning?: (p: PersonRow) => string | null;
   emptyLabel: string;
+  teamColor?: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: AVAILABLE_ZONE });
   return (
@@ -242,6 +263,7 @@ function AvailableZone({
               role="available"
               warning={rowWarning?.(p) ?? null}
               onTap={() => onAdd(p)}
+              teamColor={teamColor}
             />
           ))
         )}
@@ -255,11 +277,13 @@ function DraggableRow({
   role,
   warning,
   onTap,
+  teamColor,
 }: {
   row: PersonRow;
   role: 'available' | 'selected';
   warning: string | null;
   onTap: () => void;
+  teamColor?: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: row.key,
@@ -289,7 +313,12 @@ function DraggableRow({
       }}
       className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-line bg-bg px-2.5 py-2 text-left transition active:scale-[0.99] hover:border-ink-dim"
     >
-      <Avatar name={row.name} size={32} surfaceColor="var(--bg)" />
+      <Avatar
+        name={row.name}
+        size={32}
+        teamId={teamColor}
+        surfaceColor="var(--bg)"
+      />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-bold">{row.name}</p>
         <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
