@@ -7,7 +7,11 @@
     <link rel="mask-icon" href="/icon.svg" color="#ff4a1c" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0a0a0a" />
+    <!-- iOS Safari reads `apple-mobile-web-app-capable`; Chromium has
+         deprecated the prefixed form and wants the unprefixed
+         `mobile-web-app-capable`. Ship both so neither browser warns. -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="CHEQ Fest" />
     <meta name="description" content="Real-time CHEQ company sports fest tracker — scores, lineups, leaderboard." />
