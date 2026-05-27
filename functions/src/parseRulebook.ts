@@ -202,7 +202,13 @@ async function callAnthropic(
   try {
     response = await client.messages.create({
       model: MODEL,
-      max_tokens: 8_000,
+      // 16 sports × ~1.5-2k tokens each (verbose schema with rule arrays
+      // + confidence map) blew past the previous 8k ceiling, getting
+      // truncated mid-JSON and breaking JSON.parse. Sonnet 4.6 supports
+      // up to 64k output tokens; 32k covers the worst realistic rulebook
+      // with headroom. The output is still bounded by what the rulebook
+      // actually contains, so most calls will use far less.
+      max_tokens: 32_000,
       // We previously used `output_config.format = json_schema` for
       // guaranteed-shape output. With 22 confidence fields + 22 sport
       // fields + a few nested objects, Anthropic's grammar compiler was
