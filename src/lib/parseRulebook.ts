@@ -26,12 +26,13 @@ export type ParsedSport = {
 
 export type ParsedRulebook = { sports: ParsedSport[] };
 
-// Default callable timeout is 70s — bump to 120s to match the function's
-// server-side timeout. Cold-start + LLM call can take ~30-60s.
+// Default callable timeout is 70s. Server-side function timeout is 540s
+// (Gen 2 max); the client mirrors that so a slow Sonnet call doesn't
+// surface as an opaque 504 just because the client gave up first.
 const callable = httpsCallable<
   { text?: string; storagePath?: string },
   ParsedRulebook
->(functions, 'parseRulebook', { timeout: 120_000 });
+>(functions, 'parseRulebook', { timeout: 540_000 });
 
 export async function parseRulebook(
   input: { text: string } | { storagePath: string },

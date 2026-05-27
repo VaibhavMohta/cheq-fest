@@ -286,7 +286,11 @@ type ParsedRulebook = {
 };
 
 export const parseRulebook = onCall(
-  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 120, memory: '512MiB' },
+  // 540s is the max for Gen 2 callables. Sonnet 4.6 with a long
+  // multi-sport rulebook can run 60-180s on first request; the previous
+  // 120s ceiling was tripping prod uploads. 1GiB memory gives pdf-parse
+  // + the SDK comfortable headroom on bigger PDFs.
+  { secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 540, memory: '1GiB' },
   async (req): Promise<ParsedRulebook> => {
     // Auth gate — only admin or super-admin.
     const claims = req.auth?.token as { admin?: boolean; superAdmin?: boolean } | undefined;
