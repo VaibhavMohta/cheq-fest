@@ -1,7 +1,14 @@
 import clsx from 'clsx';
 import { Link, useRouterState } from '@tanstack/react-router';
 import type { ComponentType, SVGProps } from 'react';
-import { ArenaIcon, HomeIcon, LeaderboardIcon, ProfileIcon, RulebookIcon } from './icons';
+import {
+  ArenaIcon,
+  HomeIcon,
+  LeaderboardIcon,
+  PlayersIcon,
+  ProfileIcon,
+  RulebookIcon,
+} from './icons';
 
 type Item = {
   to: string;
@@ -13,6 +20,7 @@ const ITEMS: readonly Item[] = [
   { to: '/', label: 'Home', Icon: HomeIcon },
   { to: '/arena', label: 'Arena', Icon: ArenaIcon },
   { to: '/leaderboard', label: 'Board', Icon: LeaderboardIcon },
+  { to: '/players', label: 'Players', Icon: PlayersIcon },
   { to: '/rulebook', label: 'Rules', Icon: RulebookIcon },
   { to: '/profile', label: 'Me', Icon: ProfileIcon },
 ];
@@ -21,7 +29,7 @@ export function TabBar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
     <nav
-      className="fixed inset-x-3 bottom-3 z-50 grid grid-cols-5 gap-1 rounded-3xl border border-line p-2"
+      className="fixed inset-x-3 bottom-3 z-50 grid grid-cols-6 gap-1 rounded-3xl border border-line p-2"
       style={{
         background: 'color-mix(in oklab, var(--bg-card) 92%, transparent)',
         backdropFilter: 'blur(20px)',
