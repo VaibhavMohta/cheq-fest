@@ -10,7 +10,15 @@ import { useRole } from '@/lib/roles';
 import { useAuth } from '@/lib/auth';
 import { useActiveEvent } from '@/lib/activeEvent';
 import { useAllEventPlayers, type PersonRow } from '@/lib/playerDirectory';
-import { rosterRef, sportRef, sportsCol, teamRef, teamsCol, type RosterDoc } from '@/lib/db';
+import {
+  ensureTeamMember,
+  rosterRef,
+  sportRef,
+  sportsCol,
+  teamRef,
+  teamsCol,
+  type RosterDoc,
+} from '@/lib/db';
 import type { LineupPlayer, LineupSport, LineupState } from '@/lib/lineup';
 import type { SportDoc } from '@/types/sport';
 import type { TeamDoc } from '@/types/player';
@@ -294,11 +302,17 @@ function LineupEditor({
 
   // Assign / clear the Group Captain on the team doc. Admin-only on the
   // server (Firestore rule); the UI also gates by `canEditGc` below.
+  // Auto-adds the captain to team.members[] so the captain invariant
+  // holds even if the email isn't already a team member.
   const assignGc = useMutation({
     mutationFn: async (email: string | null) => {
+      const normalized = email?.toLowerCase() ?? null;
+      if (normalized) {
+        await ensureTeamMember(eventId, teamId, normalized);
+      }
       await setDoc(
         teamRef(eventId, teamId),
-        { groupCaptainEmail: email?.toLowerCase() ?? null },
+        { groupCaptainEmail: normalized },
         { merge: true },
       );
     },
@@ -308,13 +322,18 @@ function LineupEditor({
     },
   });
 
-  // Assign / clear the Sport Captain on the per-sport roster doc. Allowed
-  // for admins and for the team's Group Captain.
+  // Assign / clear the Sport Captain on the per-sport roster doc.
+  // Allowed for admins and for the team's Group Captain. Auto-adds the
+  // SC to team.members[] for the same invariant.
   const assignSc = useMutation({
     mutationFn: async (email: string | null) => {
+      const normalized = email?.toLowerCase() ?? null;
+      if (normalized) {
+        await ensureTeamMember(eventId, teamId, normalized);
+      }
       await setDoc(
         rosterRef(eventId, teamId, sportId),
-        { sportCaptainEmail: email?.toLowerCase() ?? null },
+        { sportCaptainEmail: normalized },
         { merge: true },
       );
     },
@@ -373,16 +392,23 @@ function LineupEditor({
     };
     if (!team) return empty;
 
-    // Cross-bucket dedup. If a stored roster has the same email in two
-    // buckets (e.g. a previous bad write that put the captain in both
-    // pitch and notPlaying), first-placement wins in this priority
-    // order: pitch > tentative > substitutes > notPlaying.
+    // Cross-bucket dedup + ghost filter.
+    //
+    // Drop any email that is no longer in team.members. Roster docs can
+    // accumulate "ghost" emails — players who were once on the team but
+    // since got moved to another team or removed entirely. Those ghosts
+    // never render (byId doesn't know about them) but they still count
+    // toward the bucket header, e.g. "ON THE PITCH 2/2" with zero
+    // visible tiles. Excluding them here keeps the count honest and
+    // makes the next drop persist the cleanup.
+    const memberEmails = new Set(team.members.map((m) => m.toLowerCase()));
     const placed = new Set<string>();
     const take = (raw: string[]): string[] => {
       const out: string[] = [];
       for (const r of raw) {
         const e = r.toLowerCase();
         if (placed.has(e)) continue;
+        if (!memberEmails.has(e)) continue; // ghost — skip
         placed.add(e);
         out.push(e);
       }

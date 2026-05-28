@@ -7,7 +7,9 @@ import { Avatar } from '@/components/shared/Avatar';
 import { Button } from '@/components/shared/Button';
 import { PlayerPicker } from '@/components/shared/PlayerPicker';
 import {
+  ensureTeamMember,
   matchesCol,
+  purgePlayerFromTeam,
   refereeEventsCol,
   stagedPlayersCol,
   teamRef,
@@ -186,31 +188,26 @@ export function TeamDetail({ eventId, teamId, onClose }: Props) {
       // and team membership survives the sign-in transition.
       const personEmail = args.person.email.toLowerCase();
       const allTeamDocs = (await getDocs(teamsCol(eventId))).docs;
-      const writes: Promise<void>[] = [];
-      for (const t of allTeamDocs) {
-        const data = t.data();
-        const members = new Set(data.members.map((m) => m.toLowerCase()));
-        const before = members.size;
-        if (t.id === args.nextTeamId) {
-          members.add(personEmail);
-        } else {
-          members.delete(personEmail);
-        }
-        if (members.size !== before) {
-          writes.push(setDoc(t.ref, { members: Array.from(members) }, { merge: true }));
-        }
-      }
-      // If the person was the GC of any team they're leaving, clear that.
-      for (const t of allTeamDocs) {
-        const data = t.data();
-        if (
+
+      // For every team the player is leaving, cascade-clean their email
+      // from members[], captain fields, and every roster bucket /
+      // sportCaptainEmail. Without this, ghosts accumulate after each
+      // re-assignment.
+      const leaves = allTeamDocs.filter(
+        (t) =>
           t.id !== args.nextTeamId &&
-          data.groupCaptainEmail?.toLowerCase() === personEmail
-        ) {
-          writes.push(setDoc(t.ref, { groupCaptainEmail: null }, { merge: true }));
-        }
+          (t.data().members ?? []).some(
+            (m: string) => m.toLowerCase() === personEmail,
+          ),
+      );
+      await Promise.all(
+        leaves.map((t) => purgePlayerFromTeam(eventId, t.id, personEmail)),
+      );
+
+      // Add to the new team's members[] if joining one (idempotent).
+      if (args.nextTeamId) {
+        await ensureTeamMember(eventId, args.nextTeamId, personEmail);
       }
-      await Promise.all(writes);
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: teamsQk(eventId) });
@@ -222,9 +219,15 @@ export function TeamDetail({ eventId, teamId, onClose }: Props) {
 
   const setGroupCaptain = useMutation({
     mutationFn: async (email: string | null) => {
+      const normalized = email?.toLowerCase() ?? null;
+      // Auto-add the captain to team.members[] first so the captain
+      // invariant ("captain is always a team member") never breaks.
+      if (normalized) {
+        await ensureTeamMember(eventId, teamId, normalized);
+      }
       await setDoc(
         teamRef(eventId, teamId),
-        { groupCaptainEmail: email?.toLowerCase() ?? null },
+        { groupCaptainEmail: normalized },
         { merge: true },
       );
     },

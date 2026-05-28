@@ -9,6 +9,7 @@ import { useRole } from '@/lib/roles';
 import { useActiveEvent } from '@/lib/activeEvent';
 import { useAllEventPlayers, type PersonRow } from '@/lib/playerDirectory';
 import {
+  ensureTeamMember,
   rosterRef,
   rostersCol,
   sportsCol,
@@ -354,9 +355,14 @@ function ViceCaptainPicker({
 
   const save = useMutation({
     mutationFn: async (email: string | null) => {
+      const normalized = email?.toLowerCase() ?? null;
+      // Auto-add to members[] first so VC is always a team member.
+      if (normalized) {
+        await ensureTeamMember(eventId, teamId, normalized);
+      }
       await setDoc(
         teamRef(eventId, teamId),
-        { viceCaptainEmail: email?.toLowerCase() ?? null },
+        { viceCaptainEmail: normalized },
         { merge: true },
       );
     },
