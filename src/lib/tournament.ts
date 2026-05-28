@@ -114,14 +114,42 @@ export type TeamStanding = {
  * default if the sport has no `points` field configured yet (matches
  * the awardPoints Cloud Function's behaviour).
  */
+/**
+ * Resolve which point scheme applies to a given match. Lookup chain
+ * (highest priority first):
+ *   1. match.points (per-match override set when the fixture is fixed)
+ *   2. sport.tournament.roundPoints[match.round] (per-round override)
+ *   3. sport.points (default scheme)
+ *   4. Hard-coded fallback ({ win: 3, draw: 1, loss: 0 }) if nothing
+ *      else is configured.
+ *
+ * Each field falls through independently — e.g. a match can override
+ * win without touching draw / loss, and the lower layers fill in.
+ */
+export function pointsForMatch(
+  sport: Pick<SportDoc, 'points' | 'tournament'> | null | undefined,
+  roundLabel: string | null | undefined,
+  matchPoints?: { win: number; draw: number; loss: number } | null,
+): { win: number; draw: number; loss: number } {
+  const sportDefault = {
+    win: sport?.points?.win ?? 3,
+    draw: sport?.points?.draw ?? 1,
+    loss: sport?.points?.loss ?? 0,
+  };
+  const roundOverride = roundLabel
+    ? sport?.tournament?.roundPoints?.[roundLabel]
+    : undefined;
+  return {
+    win: matchPoints?.win ?? roundOverride?.win ?? sportDefault.win,
+    draw: matchPoints?.draw ?? roundOverride?.draw ?? sportDefault.draw,
+    loss: matchPoints?.loss ?? roundOverride?.loss ?? sportDefault.loss,
+  };
+}
+
 export function aggregateStandings(
   matches: readonly MatchDoc[],
-  sport: Pick<SportDoc, 'points'> | null | undefined,
+  sport: Pick<SportDoc, 'points' | 'tournament'> | null | undefined,
 ): TeamStanding[] {
-  const win = sport?.points?.win ?? 3;
-  const draw = sport?.points?.draw ?? 1;
-  const loss = sport?.points?.loss ?? 0;
-
   const byTeam = new Map<TeamId, TeamStanding>();
   const ensure = (id: TeamId): TeamStanding => {
     let s = byTeam.get(id);
@@ -134,6 +162,8 @@ export function aggregateStandings(
 
   for (const m of matches) {
     if (m.status !== 'final') continue;
+    // Per-match point lookup — match override > round override > sport default.
+    const { win, draw, loss } = pointsForMatch(sport, m.round, m.points ?? null);
     const a = ensure(m.teamAId);
     const b = ensure(m.teamBId);
     a.played += 1;

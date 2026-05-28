@@ -18,6 +18,12 @@ export const awardPoints = firestore
       teamBId?: string;
       winnerTeamId?: string | null;
       pointsAwardedAt?: Timestamp | null;
+      /** Optional round label (e.g. "Group", "QF", "SF", "F") for
+       *  per-round point overrides. */
+      round?: string | null;
+      /** Per-match override — highest priority in the lookup chain.
+       *  Set by admins when fixing the fixture on the Matches tab. */
+      points?: { win: number; draw: number; loss: number } | null;
     };
 
     if (after.status !== 'final') return;
@@ -36,8 +42,27 @@ export const awardPoints = firestore
       });
       return;
     }
-    const points = (sportSnap.data() as { points?: { win: number; draw: number; loss: number } })
-      .points ?? { win: 3, draw: 1, loss: 0 };
+    const sportData = sportSnap.data() as {
+      points?: { win: number; draw: number; loss: number };
+      tournament?: {
+        roundPoints?: Record<string, { win: number; draw: number; loss: number }>;
+      } | null;
+    };
+    const defaults = sportData.points ?? { win: 3, draw: 1, loss: 0 };
+    // Lookup chain (highest priority first):
+    //   1. match.points  (per-match override set on the Matches tab)
+    //   2. sport.tournament.roundPoints[match.round] (per-round override)
+    //   3. sport.points  (sport default)
+    // Each field falls through independently.
+    const roundOverride = after.round
+      ? sportData.tournament?.roundPoints?.[after.round]
+      : undefined;
+    const matchOverride = after.points ?? undefined;
+    const points = {
+      win: matchOverride?.win ?? roundOverride?.win ?? defaults.win,
+      draw: matchOverride?.draw ?? roundOverride?.draw ?? defaults.draw,
+      loss: matchOverride?.loss ?? roundOverride?.loss ?? defaults.loss,
+    };
 
     const winner = after.winnerTeamId ?? null;
     const teamAPoints = winner === after.teamAId ? points.win : winner === null ? points.draw : points.loss;
@@ -61,6 +86,9 @@ export const awardPoints = firestore
 
     logger.info('Awarded points', {
       matchId: ctx.params.matchId,
+      round: after.round ?? null,
+      usedMatchOverride: !!matchOverride,
+      usedRoundOverride: !!roundOverride && !matchOverride,
       winner,
       teamAPoints,
       teamBPoints,

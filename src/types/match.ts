@@ -36,6 +36,11 @@ export type MatchDoc = {
   refereeUids: string[];
   state: MatchState;
   status: MatchStatus;
+  /** Optional per-match W/D/L override. Top of the lookup chain — takes
+   *  precedence over the per-round override and the sport default.
+   *  Admin sets this on the Matches tab while fixing the fixture so a
+   *  Final win can be worth 50 even if the per-round override is 10. */
+  points?: { win: number; draw: number; loss: number } | null;
   /** Set when status flips to 'final'. null = draw. */
   winnerTeamId: TeamId | null;
   pointsAwardedAt: Timestamp | null;

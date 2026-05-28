@@ -119,6 +119,9 @@ function MatchesTabInner({
       venue: string;
       group?: string | null;
       round?: string | null;
+      /** Optional per-match W/D/L override set on the form. Null /
+       *  undefined = use the per-round override or sport default. */
+      points?: { win: number; draw: number; loss: number } | null;
     }) => {
       await addDoc(matchesCol(eventId), {
         ...args,
@@ -130,6 +133,7 @@ function MatchesTabInner({
         createdAt: serverTimestamp() as unknown as Timestamp,
         group: args.group ?? null,
         round: args.round ?? null,
+        points: args.points ?? null,
       });
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: matchesQk(eventId) }),
@@ -208,6 +212,7 @@ function CreateMatchForm({
     venue: string;
     group: string | null;
     round: string | null;
+    points: { win: number; draw: number; loss: number } | null;
   }) => void;
 }) {
   const [sportId, setSportId] = useState<string>('');
@@ -217,6 +222,12 @@ function CreateMatchForm({
   const [venue, setVenue] = useState<string>('');
   const [group, setGroup] = useState<string>(''); // '' = None
   const [round, setRound] = useState<string>(''); // '' = None
+  // Per-match point override. `enableOverride=false` → pass null and let
+  // the resolver fall through to per-round / sport defaults.
+  const [enableOverride, setEnableOverride] = useState(false);
+  const [pointsWin, setPointsWin] = useState('50');
+  const [pointsDraw, setPointsDraw] = useState('0');
+  const [pointsLoss, setPointsLoss] = useState('30');
   const [error, setError] = useState<string | null>(null);
   // Reset group/round if the picked sport has no tournament config for
   // them — otherwise stale state from a previous pick would persist.
@@ -348,6 +359,56 @@ function CreateMatchForm({
       <FormField label="Venue">
         <TextInput value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="Ground A" />
       </FormField>
+
+      {/* Per-match point override. Off by default — admin opts in for
+          high-value matches (e.g. finals). When off, the resolver falls
+          through to the per-round override or the sport default. */}
+      <div className="rounded-xl border border-line bg-bg-card p-3">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={enableOverride}
+            onChange={(e) => setEnableOverride(e.target.checked)}
+            className="h-4 w-4 accent-current"
+            style={{ accentColor: 'var(--accent)' }}
+          />
+          <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
+            Override points for this match
+          </span>
+        </label>
+        {enableOverride && (
+          <>
+            <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+              These values supersede the sport default and any per-round
+              override. E.g. Win 50 / Loss 30 for the Final.
+            </p>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <FormField label="Win">
+                <TextInput
+                  type="number"
+                  value={pointsWin}
+                  onChange={(e) => setPointsWin(e.target.value)}
+                />
+              </FormField>
+              <FormField label="Draw">
+                <TextInput
+                  type="number"
+                  value={pointsDraw}
+                  onChange={(e) => setPointsDraw(e.target.value)}
+                />
+              </FormField>
+              <FormField label="Loss">
+                <TextInput
+                  type="number"
+                  value={pointsLoss}
+                  onChange={(e) => setPointsLoss(e.target.value)}
+                />
+              </FormField>
+            </div>
+          </>
+        )}
+      </div>
+
       {error && <p className="font-mono text-[10px] text-accent">{error}</p>}
       <Button
         type="button"
@@ -373,6 +434,18 @@ function CreateMatchForm({
               return;
             }
           }
+          // Validate per-match override numbers if it's enabled.
+          let pointsOverride: { win: number; draw: number; loss: number } | null = null;
+          if (enableOverride) {
+            const w = Number(pointsWin);
+            const d = Number(pointsDraw);
+            const l = Number(pointsLoss);
+            if (![w, d, l].every((n) => Number.isFinite(n))) {
+              setError('Match points must all be numbers.');
+              return;
+            }
+            pointsOverride = { win: Math.trunc(w), draw: Math.trunc(d), loss: Math.trunc(l) };
+          }
           setError(null);
           const startTs = scheduled ? Timestamp.fromDate(scheduled) : null;
           onCreate({
@@ -383,12 +456,14 @@ function CreateMatchForm({
             venue,
             group: group || null,
             round: round || null,
+            points: pointsOverride,
           });
           // Reset only the variable bits.
           setScheduled(null);
           setVenue('');
           setGroup('');
           setRound('');
+          setEnableOverride(false);
         }}
       >
         {pending ? 'Creating…' : 'Create Match'}
