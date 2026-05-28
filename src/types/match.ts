@@ -39,6 +39,8 @@ export type MatchDoc = {
   /** Set when status flips to 'final'. null = draw. */
   winnerTeamId: TeamId | null;
   pointsAwardedAt: Timestamp | null;
+  /** Server timestamp set when the End Match action flips status to 'final'. */
+  endedAt?: Timestamp | null;
   createdAt: Timestamp | null;
   /** Optional tournament tags. `null` = ungrouped / unlabelled (the
    *  classic flat-list behaviour). Set when admin defines groups/rounds

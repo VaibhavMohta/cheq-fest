@@ -8,6 +8,10 @@ export type StagedPlayerDoc = {
   teamId: TeamId | null;
   importedAt: Timestamp;
   importedBy: string;
+  /** When true, onUserCreate applies the `admin` custom claim during
+   *  account creation — pre-staged admin promotion for users who
+   *  haven't signed in yet. Cleared (false) by the unstage helper. */
+  pendingAdmin?: boolean;
 };
 
 export type UserDoc = {
