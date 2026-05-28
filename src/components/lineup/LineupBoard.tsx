@@ -170,6 +170,11 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
   const [quickAddBucket, setQuickAddBucket] = useState<BucketId | null>(null);
   const [quickAddQuery, setQuickAddQuery] = useState('');
 
+  // Tap-to-move sheet — when a player tile is tapped (not dragged), we
+  // pop up a small chooser so the user can move them to any other
+  // bucket without needing to find a drop target on a small screen.
+  const [moveTargetUid, setMoveTargetUid] = useState<string | null>(null);
+
   const performMove = useCallback(
     (uid: string, to: BucketId) => {
       const from = findBucket(state, uid);
@@ -371,6 +376,27 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
         </div>
       )}
 
+      {moveTargetUid && (() => {
+        const player = byId.get(moveTargetUid);
+        const currentBucket = findBucket(state, moveTargetUid);
+        if (!player || !currentBucket) {
+          // Defensive — close the sheet rather than render a half-broken one.
+          window.setTimeout(() => setMoveTargetUid(null), 0);
+          return null;
+        }
+        return (
+          <MoveSheet
+            player={player}
+            from={currentBucket}
+            onPick={(to) => {
+              performMove(moveTargetUid, to);
+              setMoveTargetUid(null);
+            }}
+            onClose={() => setMoveTargetUid(null)}
+          />
+        );
+      })()}
+
       <BucketSection
         bucket="pitch"
         count={state.pitch.length}
@@ -380,7 +406,14 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
       >
         {state.pitch.map((uid) => {
           const p = byId.get(uid);
-          return p ? <DragTile key={uid} player={p} dimmed={!isMatch(uid)} /> : null;
+          return p ? (
+            <DragTile
+              key={uid}
+              player={p}
+              dimmed={!isMatch(uid)}
+              onTap={() => setMoveTargetUid(uid)}
+            />
+          ) : null;
         })}
       </BucketSection>
 
@@ -392,7 +425,14 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
       >
         {state.tentative.map((uid) => {
           const p = byId.get(uid);
-          return p ? <DragTile key={uid} player={p} dimmed={!isMatch(uid)} /> : null;
+          return p ? (
+            <DragTile
+              key={uid}
+              player={p}
+              dimmed={!isMatch(uid)}
+              onTap={() => setMoveTargetUid(uid)}
+            />
+          ) : null;
         })}
       </BucketSection>
 
@@ -405,7 +445,14 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
       >
         {state.substitutes.map((uid) => {
           const p = byId.get(uid);
-          return p ? <DragTile key={uid} player={p} dimmed={!isMatch(uid)} /> : null;
+          return p ? (
+            <DragTile
+              key={uid}
+              player={p}
+              dimmed={!isMatch(uid)}
+              onTap={() => setMoveTargetUid(uid)}
+            />
+          ) : null;
         })}
       </BucketSection>
 
@@ -417,7 +464,14 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
       >
         {state.notPlaying.map((uid) => {
           const p = byId.get(uid);
-          return p ? <DragTile key={uid} player={p} dimmed={!isMatch(uid)} /> : null;
+          return p ? (
+            <DragTile
+              key={uid}
+              player={p}
+              dimmed={!isMatch(uid)}
+              onTap={() => setMoveTargetUid(uid)}
+            />
+          ) : null;
         })}
       </BucketSection>
 
@@ -440,5 +494,68 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
         )}
       </DragOverlay>
     </DndContext>
+  );
+}
+
+/**
+ * Tap-to-move chooser. Renders an inline panel listing every bucket
+ * other than the player's current one — tap a destination to move
+ * them. Used when the user taps a player tile (drag still works
+ * via long-press / pointer-distance).
+ */
+function MoveSheet({
+  player,
+  from,
+  onPick,
+  onClose,
+}: {
+  player: LineupPlayer;
+  from: BucketId;
+  onPick: (to: BucketId) => void;
+  onClose: () => void;
+}) {
+  const destinations: BucketId[] = BUCKETS.filter((b) => b !== from);
+  return (
+    <div className="mx-5 mb-3 rounded-2xl border border-line bg-bg-card p-3">
+      <header className="mb-2 flex items-center justify-between">
+        <div className="min-w-0">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
+            Move {player.name.split(' ')[0]}
+          </p>
+          <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+            Currently in {BUCKET_LABEL[from]}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim hover:text-accent"
+        >
+          Close
+        </button>
+      </header>
+      <div className="grid grid-cols-2 gap-2">
+        {destinations.map((b) => (
+          <button
+            key={b}
+            type="button"
+            onClick={() => onPick(b)}
+            className="flex items-center gap-2 rounded-lg border border-line bg-bg px-3 py-2 text-left hover:border-accent hover:bg-bg-elev active:scale-[0.99]"
+          >
+            <span
+              aria-hidden
+              className="inline-block h-2 w-2 rounded-full"
+              style={{ background: BUCKET_ACCENT[b] }}
+            />
+            <span className="font-mono text-[10px] uppercase tracking-[0.06em]">
+              {BUCKET_LABEL[b]}
+            </span>
+            <span aria-hidden className="ml-auto text-ink-mute">
+              →
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

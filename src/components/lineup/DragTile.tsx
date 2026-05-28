@@ -11,9 +11,13 @@ type Props = {
    *  match. The tile stays in place (no bucket reflow) so spatial memory
    *  is preserved. */
   dimmed?: boolean;
+  /** Tap handler — opens the parent's move sheet. Distinct from drag,
+   *  which still triggers via long-press / pointer-distance. Sport
+   *  captains are tap-locked because they can't move (same rule as drag). */
+  onTap?: () => void;
 };
 
-export function DragTile({ player, surfaceColor = 'var(--bg-card)', dimmed }: Props) {
+export function DragTile({ player, surfaceColor = 'var(--bg-card)', dimmed, onTap }: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: player.uid,
     disabled: player.isCaptain,
@@ -49,13 +53,24 @@ export function DragTile({ player, surfaceColor = 'var(--bg-card)', dimmed }: Pr
       type="button"
       {...attributes}
       {...listeners}
+      onClick={(e) => {
+        // dnd-kit's pointer sensor has an 8px activation distance, so a
+        // genuine click without drag-movement reaches us here. Suppress
+        // for captains (they can't move) and during an active drag (so
+        // mouse-up after drag doesn't trigger the tap menu).
+        if (player.isCaptain) return;
+        if (isDragging) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onTap?.();
+      }}
       style={style}
       aria-roledescription={player.isCaptain ? 'Locked tile' : 'Draggable tile'}
       className={clsx(
         'flex select-none flex-col items-center gap-1.5 rounded-xl px-1 py-2 touch-none transition-opacity',
         isDragging && 'opacity-40',
         dimmed && !isDragging && 'opacity-25',
-        player.isCaptain ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing',
+        player.isCaptain ? 'cursor-not-allowed' : 'cursor-pointer active:cursor-grabbing hover:bg-bg-elev',
       )}
     >
       <Avatar
