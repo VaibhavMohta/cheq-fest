@@ -419,6 +419,36 @@ function LineupEditor({
     };
   }, [team, roster]);
 
+  // ALL hooks must run on every render, in the same order. Compute the
+  // picker-related memos here — before any early returns — using safe
+  // fallbacks when `team` hasn't loaded yet.
+  const gcEmail = team?.groupCaptainEmail?.toLowerCase() ?? null;
+  const scEmail = roster?.sportCaptainEmail?.toLowerCase() ?? null;
+  const currentSelectionEmail = picker === 'group' ? gcEmail : scEmail;
+
+  const memberSet = useMemo(
+    () => new Set((team?.members ?? []).map((e) => e.toLowerCase())),
+    [team?.members],
+  );
+  const memberRows: PersonRow[] = useMemo(
+    () => people.filter((p) => memberSet.has(p.email.toLowerCase())),
+    [people, memberSet],
+  );
+  const selectedRows: PersonRow[] = useMemo(() => {
+    if (!currentSelectionEmail) return [];
+    const hit = memberRows.find(
+      (r) => r.email.toLowerCase() === currentSelectionEmail,
+    );
+    return hit ? [hit] : [];
+  }, [currentSelectionEmail, memberRows]);
+  const availableRows: PersonRow[] = useMemo(
+    () =>
+      memberRows.filter(
+        (r) => r.email.toLowerCase() !== currentSelectionEmail,
+      ),
+    [memberRows, currentSelectionEmail],
+  );
+
   if (!allLoaded) {
     return <p className="px-5 text-ink-dim">Loading lineup…</p>;
   }
@@ -452,8 +482,6 @@ function LineupEditor({
   // in the directory.
   const directoryByEmail = new Map<string, PersonRow>();
   for (const p of people) directoryByEmail.set(p.email.toLowerCase(), p);
-  const gcEmail = team.groupCaptainEmail?.toLowerCase() ?? null;
-  const scEmail = roster?.sportCaptainEmail?.toLowerCase() ?? null;
   const gcName = gcEmail
     ? directoryByEmail.get(gcEmail)?.name ?? gcEmail.split('@')[0]!
     : null;
@@ -470,35 +498,6 @@ function LineupEditor({
     !!userEmail && !!gcEmail && userEmail.toLowerCase() === gcEmail;
   const canEditGc = isAdmin;
   const canEditSc = isAdmin || callerIsGc;
-
-  // Picker rows = team members joined to the directory. We use PersonRow
-  // straight from `useAllEventPlayers` so the picker gets full identity
-  // (uid, claimed status, etc.) for free — and the same Fuse search
-  // / drag-and-drop UX that captaincy + admin grant flows already use.
-  const memberSet = useMemo(
-    () => new Set(team.members.map((e) => e.toLowerCase())),
-    [team.members],
-  );
-  const memberRows: PersonRow[] = useMemo(
-    () => people.filter((p) => memberSet.has(p.email.toLowerCase())),
-    [people, memberSet],
-  );
-
-  const currentSelectionEmail = picker === 'group' ? gcEmail : scEmail;
-  const selectedRows: PersonRow[] = useMemo(() => {
-    if (!currentSelectionEmail) return [];
-    const hit = memberRows.find(
-      (r) => r.email.toLowerCase() === currentSelectionEmail,
-    );
-    return hit ? [hit] : [];
-  }, [currentSelectionEmail, memberRows]);
-  const availableRows: PersonRow[] = useMemo(
-    () =>
-      memberRows.filter(
-        (r) => r.email.toLowerCase() !== currentSelectionEmail,
-      ),
-    [memberRows, currentSelectionEmail],
-  );
 
   return (
     <>
