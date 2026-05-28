@@ -4,6 +4,7 @@ import { onSnapshot, setDoc } from 'firebase/firestore';
 import clsx from 'clsx';
 import { TopBar } from '@/components/shared/TopBar';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { PlayerPicker } from '@/components/shared/PlayerPicker';
 import { LineupBoard } from '@/components/lineup/LineupBoard';
 import { useRole } from '@/lib/roles';
 import { useAuth } from '@/lib/auth';
@@ -470,21 +471,34 @@ function LineupEditor({
   const canEditGc = isAdmin;
   const canEditSc = isAdmin || callerIsGc;
 
-  // Picker rows = team members joined to the directory, sorted by name.
-  // Includes the current assignee so they can be "unselected"; only
-  // members of the team can be captains.
-  const memberRows = team.members
-    .map((rawEmail) => {
-      const email = rawEmail.toLowerCase();
-      const directory = directoryByEmail.get(email);
-      return {
-        email,
-        name: directory?.name ?? email.split('@')[0]!,
-      };
-    })
-    .sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+  // Picker rows = team members joined to the directory. We use PersonRow
+  // straight from `useAllEventPlayers` so the picker gets full identity
+  // (uid, claimed status, etc.) for free — and the same Fuse search
+  // / drag-and-drop UX that captaincy + admin grant flows already use.
+  const memberSet = useMemo(
+    () => new Set(team.members.map((e) => e.toLowerCase())),
+    [team.members],
+  );
+  const memberRows: PersonRow[] = useMemo(
+    () => people.filter((p) => memberSet.has(p.email.toLowerCase())),
+    [people, memberSet],
+  );
+
+  const currentSelectionEmail = picker === 'group' ? gcEmail : scEmail;
+  const selectedRows: PersonRow[] = useMemo(() => {
+    if (!currentSelectionEmail) return [];
+    const hit = memberRows.find(
+      (r) => r.email.toLowerCase() === currentSelectionEmail,
     );
+    return hit ? [hit] : [];
+  }, [currentSelectionEmail, memberRows]);
+  const availableRows: PersonRow[] = useMemo(
+    () =>
+      memberRows.filter(
+        (r) => r.email.toLowerCase() !== currentSelectionEmail,
+      ),
+    [memberRows, currentSelectionEmail],
+  );
 
   return (
     <>
@@ -515,19 +529,17 @@ function LineupEditor({
             picker === 'group' ? 'Assign Group Captain' : 'Assign Sport Captain'
           }
           color={picker === 'group' ? 'var(--gold)' : 'var(--accent-3)'}
-          rows={memberRows}
-          selectedEmail={picker === 'group' ? gcEmail : scEmail}
-          onPick={(email) => {
-            if (picker === 'group') assignGc.mutate(email);
-            else assignSc.mutate(email);
+          teamColor={team.color}
+          available={availableRows}
+          selected={selectedRows}
+          onChange={(next) => {
+            const pickEmail = next[0]?.email.toLowerCase() ?? null;
+            if (picker === 'group') assignGc.mutate(pickEmail);
+            else assignSc.mutate(pickEmail);
           }}
           onClose={() => setPicker(null)}
           pending={picker === 'group' ? assignGc.isPending : assignSc.isPending}
-          error={
-            picker === 'group'
-              ? assignGc.error
-              : assignSc.error
-          }
+          error={picker === 'group' ? assignGc.error : assignSc.error}
           emptyHint={
             memberRows.length === 0
               ? 'Add members to this team first (Admin → Teams tab).'
@@ -608,12 +620,21 @@ function CaptainPill({
   );
 }
 
+/**
+ * Captain assignment panel — thin wrapper around the shared
+ * `PlayerPicker` so captain selection has the same drag-and-drop +
+ * fuzzy-search UX as roster, referee, and admin-grant selection. Border
+ * + heading are color-keyed to the role (gold = GC, cyan = SC). Drag a
+ * row from Available into Selected (or tap), tap × on the chip to
+ * clear.
+ */
 function CaptainAssignmentPanel({
   title,
   color,
-  rows,
-  selectedEmail,
-  onPick,
+  teamColor,
+  available,
+  selected,
+  onChange,
   onClose,
   pending,
   error,
@@ -621,9 +642,10 @@ function CaptainAssignmentPanel({
 }: {
   title: string;
   color: string;
-  rows: { email: string; name: string }[];
-  selectedEmail: string | null;
-  onPick: (email: string | null) => void;
+  teamColor?: string;
+  available: PersonRow[];
+  selected: PersonRow[];
+  onChange: (next: PersonRow[]) => void;
   onClose: () => void;
   pending: boolean;
   error: unknown;
@@ -655,42 +677,18 @@ function CaptainAssignmentPanel({
           {emptyHint}
         </p>
       ) : (
-        <ul className="flex max-h-64 flex-col gap-1.5 overflow-y-auto">
-          {rows.map((r) => {
-            const isSelected = !!selectedEmail && selectedEmail === r.email;
-            return (
-              <li key={r.email}>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => onPick(isSelected ? null : r.email)}
-                  className={clsx(
-                    'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition',
-                    isSelected ? 'bg-bg-elev' : 'bg-bg hover:bg-bg-elev',
-                  )}
-                  style={{
-                    borderColor: isSelected ? color : 'var(--line)',
-                  }}
-                >
-                  <span className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold">{r.name}</p>
-                    <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
-                      {r.email}
-                    </p>
-                  </span>
-                  {isSelected && (
-                    <span
-                      className="ml-2 shrink-0 font-mono text-[9px] uppercase tracking-[0.08em]"
-                      style={{ color }}
-                    >
-                      Selected · tap to clear
-                    </span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <div className={clsx(pending && 'pointer-events-none opacity-60')}>
+          <PlayerPicker
+            mode="single"
+            available={available}
+            selected={selected}
+            onChange={onChange}
+            teamColor={teamColor}
+            searchPlaceholder="Search team members…"
+            emptyAvailableLabel="Everyone on the team is already selected."
+            emptySelectedLabel="Tap a member to assign"
+          />
+        </div>
       )}
 
       {error != null && (
