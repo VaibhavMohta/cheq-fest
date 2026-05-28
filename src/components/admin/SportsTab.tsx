@@ -26,7 +26,7 @@ import {
 import type { TeamDoc } from '@/types/player';
 import { emptyMatchState, type MatchStatus } from '@/types/match';
 import { STANDARD_SPORTS } from '@/data/standardSports';
-import { pairKey, pairsForRoundRobin } from '@/lib/tournament';
+import { pairKey, pairsForFirstKnockoutRound, pairsForRoundRobin } from '@/lib/tournament';
 import { colorVarFor } from '@/types/team';
 import { Button } from '@/components/shared/Button';
 import { FormField, TextArea, TextInput } from './FormField';
@@ -651,10 +651,28 @@ function TournamentEditor({
     return m;
   }, [teams.data]);
 
-  // Round-robin generator. Reads existing matches in this sport+group so
-  // re-runs don't create duplicates.
+  // Match generator. Picks the pairings strategy from the group's
+  // `format` field (defaults to round-robin) and tags the new matches
+  // with the appropriate round label. Reads existing matches in this
+  // sport+group so re-runs don't create duplicates.
   const generate = useMutation({
     mutationFn: async (group: TournamentGroup) => {
+      const format = group.format ?? 'round-robin';
+      let pairs: Array<[string, string]>;
+      let round: string;
+      let error: string | null = null;
+      if (format === 'knockout') {
+        const k = pairsForFirstKnockoutRound(group.teamIds);
+        pairs = k.pairs;
+        round = k.round;
+        error = k.error;
+      } else {
+        pairs = pairsForRoundRobin(group.teamIds);
+        round = 'Group';
+      }
+      if (error) {
+        return { created: 0, skipped: 0, error };
+      }
       const existing = await getDocs(
         query(
           matchesCol(eventId),
@@ -665,10 +683,20 @@ function TournamentEditor({
       const taken = new Set<string>();
       for (const d of existing.docs) {
         const m = d.data();
-        taken.add(pairKey(m.teamAId, m.teamBId));
+        // For round-robin we dedupe by team-pair (any round). For
+        // knockout we dedupe per (pair + round) so the second round
+        // can re-use teams from the first.
+        const key =
+          format === 'knockout'
+            ? `${pairKey(m.teamAId, m.teamBId)}|${m.round ?? ''}`
+            : pairKey(m.teamAId, m.teamBId);
+        taken.add(key);
       }
-      const pairs = pairsForRoundRobin(group.teamIds);
-      const toCreate = pairs.filter(([a, b]) => !taken.has(pairKey(a, b)));
+      const toCreate = pairs.filter(([a, b]) => {
+        const key =
+          format === 'knockout' ? `${pairKey(a, b)}|${round}` : pairKey(a, b);
+        return !taken.has(key);
+      });
       await Promise.all(
         toCreate.map(([a, b]) =>
           addDoc(matchesCol(eventId), {
@@ -684,11 +712,15 @@ function TournamentEditor({
             pointsAwardedAt: null,
             createdAt: serverTimestamp() as unknown as Timestamp,
             group: group.id,
-            round: 'Group',
+            round,
           }),
         ),
       );
-      return { created: toCreate.length, skipped: pairs.length - toCreate.length };
+      return {
+        created: toCreate.length,
+        skipped: pairs.length - toCreate.length,
+        error: null,
+      };
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin', 'matches', eventId] });
@@ -746,16 +778,35 @@ function TournamentEditor({
               }}
               onGenerate={async () => {
                 if (g.teamIds.length < 2) {
-                  window.alert('Need at least 2 teams in the group to generate a round-robin.');
+                  window.alert('Need at least 2 teams in the group to generate matches.');
                   return;
                 }
                 const result = await generate.mutateAsync(g);
+                if (result.error) {
+                  window.alert(`Could not generate: ${result.error}`);
+                  return;
+                }
                 window.alert(
                   `Created ${result.created} match${result.created === 1 ? '' : 'es'}` +
                     (result.skipped > 0
                       ? `. Skipped ${result.skipped} that already exist.`
                       : '.'),
                 );
+              }}
+              onAutofill={() => {
+                // Fill this group with every team not already in another
+                // group. Cheap one-click for the common 2-group setup.
+                const assignedElsewhere = new Set<string>(
+                  tc.groups
+                    .filter((other) => other.id !== g.id)
+                    .flatMap((other) => other.teamIds),
+                );
+                const remainder = (teams.data ?? [])
+                  .map((t) => t.id)
+                  .filter((id) => !assignedElsewhere.has(id));
+                const copy = [...tc.groups];
+                copy[idx] = { ...g, teamIds: remainder };
+                setGroups(copy);
               }}
               generating={generate.isPending && generate.variables?.id === g.id}
             />
@@ -768,9 +819,19 @@ function TournamentEditor({
           onClick={() => {
             const usedIds = new Set(tc.groups.map((g) => g.id));
             const fresh = nextGroupId(usedIds);
+            // Pre-fill the new group with every team not already
+            // assigned to an existing group — addresses the common
+            // case of "Group A is set, just put the rest into Group B".
+            // Admin can still remove any team after creation.
+            const assigned = new Set<string>(
+              tc.groups.flatMap((g) => g.teamIds),
+            );
+            const remainder = (teams.data ?? [])
+              .map((t) => t.id)
+              .filter((id) => !assigned.has(id));
             setGroups([
               ...tc.groups,
-              { id: fresh, name: `Group ${fresh}`, teamIds: [] },
+              { id: fresh, name: `Group ${fresh}`, teamIds: remainder },
             ]);
           }}
         >
@@ -882,6 +943,7 @@ function GroupEditor({
   onChange,
   onDelete,
   onGenerate,
+  onAutofill,
   generating,
 }: {
   group: TournamentGroup;
@@ -891,6 +953,7 @@ function GroupEditor({
   onChange: (next: TournamentGroup) => void;
   onDelete: () => void;
   onGenerate: () => void;
+  onAutofill: () => void;
   generating: boolean;
 }) {
   const memberSet = new Set(group.teamIds);
@@ -898,6 +961,12 @@ function GroupEditor({
   // We still show "in another group" teams as disabled chips so the
   // admin can see why they can't pick them.
   const available = allTeams.filter((t) => !memberSet.has(t.id));
+  const format: 'round-robin' | 'knockout' = group.format ?? 'round-robin';
+  // Teams in the event that aren't in any group yet — drives the
+  // visibility of the "Auto-fill from remaining" button.
+  const remainderCount = allTeams.filter(
+    (t) => !memberSet.has(t.id) && !alreadyAssigned.has(t.id),
+  ).length;
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-line bg-bg-card p-2.5">
@@ -918,6 +987,42 @@ function GroupEditor({
         >
           delete
         </button>
+      </div>
+
+      {/* Format selector — affects what the Generate button creates. */}
+      <div className="flex items-center gap-1.5">
+        <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-mute">
+          Format
+        </span>
+        <div className="flex overflow-hidden rounded-md border border-line">
+          <button
+            type="button"
+            onClick={() => onChange({ ...group, format: 'round-robin' })}
+            className={
+              format === 'round-robin'
+                ? 'bg-accent px-2 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-bg'
+                : 'bg-bg px-2 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim hover:text-ink'
+            }
+          >
+            Round-robin
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ ...group, format: 'knockout' })}
+            className={
+              format === 'knockout'
+                ? 'bg-accent px-2 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-bg'
+                : 'bg-bg px-2 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim hover:text-ink'
+            }
+          >
+            Knockout
+          </button>
+        </div>
+        <span className="font-mono text-[9px] text-ink-mute">
+          {format === 'knockout'
+            ? '· first-round only, adjacent pairs (1v2, 3v4…)'
+            : '· every pair plays once'}
+        </span>
       </div>
 
       {/* Current members */}
@@ -964,6 +1069,21 @@ function GroupEditor({
         )}
       </div>
 
+      {/* Auto-fill row — visible whenever there are unassigned event
+          teams that could be slotted into this group. Cheap shortcut
+          for the common 2-group "Group A is set, fill Group B with
+          everyone else" flow. */}
+      {remainderCount > 0 && (
+        <button
+          type="button"
+          onClick={onAutofill}
+          className="self-start rounded-md border border-accent-2/40 bg-accent-2/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-accent-2 hover:bg-accent-2/20"
+        >
+          + Auto-fill with {remainderCount} remaining team
+          {remainderCount === 1 ? '' : 's'}
+        </button>
+      )}
+
       {/* Add team dropdown */}
       <div className="flex gap-2">
         <select
@@ -992,7 +1112,11 @@ function GroupEditor({
           onClick={onGenerate}
           className="!w-auto !px-3 !py-2"
         >
-          {generating ? 'Generating…' : 'Generate round-robin'}
+          {generating
+            ? 'Generating…'
+            : format === 'knockout'
+              ? 'Generate knockout'
+              : 'Generate round-robin'}
         </Button>
       </div>
     </div>

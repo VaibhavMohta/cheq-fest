@@ -44,6 +44,57 @@ export function pairKey(a: TeamId, b: TeamId): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
+/**
+ * First-round bracket for a knockout inside a group.
+ *
+ * Pairs are formed by **adjacent indices** in the input list, so the
+ * admin controls match-ups by reordering teams (1v2, 3v4, 5v6, …).
+ * Round label is chosen from the bracket size — 2 teams → "F", 4 → "SF",
+ * 8 → "QF", 16 → "R16", 32 → "R32"; anything else falls back to "R1".
+ *
+ * Odd team counts return `{ pairs: [], round, error }` so the caller
+ * can surface a clear "add a team for a bye / remove a team for an
+ * even bracket" message — auto-bye logic is out of scope for v1.
+ */
+export function pairsForFirstKnockoutRound(teamIds: readonly TeamId[]): {
+  pairs: Array<[TeamId, TeamId]>;
+  round: string;
+  error: string | null;
+} {
+  if (teamIds.length < 2) {
+    return { pairs: [], round: 'R1', error: 'Need at least 2 teams.' };
+  }
+  if (teamIds.length % 2 !== 0) {
+    return {
+      pairs: [],
+      round: knockoutRoundFor(teamIds.length),
+      error: 'Knockout needs an even number of teams (no byes in v1).',
+    };
+  }
+  const pairs: Array<[TeamId, TeamId]> = [];
+  for (let i = 0; i < teamIds.length; i += 2) {
+    pairs.push([teamIds[i]!, teamIds[i + 1]!]);
+  }
+  return { pairs, round: knockoutRoundFor(teamIds.length), error: null };
+}
+
+function knockoutRoundFor(teamCount: number): string {
+  switch (teamCount) {
+    case 2:
+      return 'F';
+    case 4:
+      return 'SF';
+    case 8:
+      return 'QF';
+    case 16:
+      return 'R16';
+    case 32:
+      return 'R32';
+    default:
+      return 'R1';
+  }
+}
+
 export type TeamStanding = {
   teamId: TeamId;
   played: number;

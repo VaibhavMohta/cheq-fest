@@ -134,6 +134,12 @@ export type TournamentGroup = {
   name: string;
   /** Team ids that participate in this group. */
   teamIds: string[];
+  /** How the matches inside this group should be generated.
+   *  - 'round-robin': every pair plays once (default).
+   *  - 'knockout':    first-round only; pairs adjacent teams from
+   *                   `teamIds`. Admin orders the list to control
+   *                   seedings and advances winners manually. */
+  format?: 'round-robin' | 'knockout';
 };
 
 export function defaultSport(name: string): SportDoc {
