@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { Avatar } from '@/components/shared/Avatar';
 import { PlayerPicker } from '@/components/shared/PlayerPicker';
 import { useRole } from '@/lib/roles';
-import { useActiveEvent } from '@/lib/activeEvent';
+import { useActiveEvent, isEventLocked } from '@/lib/activeEvent';
 import { useAllEventPlayers, type PersonRow } from '@/lib/playerDirectory';
 import {
   ensureTeamMember,
@@ -36,9 +36,13 @@ import type { SportDoc } from '@/types/sport';
  */
 export default function TeamMgmtScreen() {
   const role = useRole();
-  const { activeEventId } = useActiveEvent();
+  const { activeEventId, event } = useActiveEvent();
   const naturalTeamIds = role.groupCaptainOf;
   const isAdmin = role.is('admin');
+  // Once the event has started, captains can no longer edit team
+  // assignments (vice-captain, sport-captain). Admins / super-admins
+  // continue to bypass.
+  const locked = !isAdmin && isEventLocked(event);
 
   // Admin override — when the active mode is admin / super-admin and the
   // user isn't naturally a Group Captain, fetch every team in the event
@@ -95,6 +99,20 @@ export default function TeamMgmtScreen() {
           <EmptyState
             title="No active event"
             hint="Pick an event from the top bar to see your team."
+          />
+        </main>
+      </>
+    );
+  }
+
+  if (locked) {
+    return (
+      <>
+        <TopBar title="Manage Team" />
+        <main className="mx-auto max-w-[420px] pb-28">
+          <EmptyState
+            title="Team edits are locked"
+            hint="The event has started — captains can no longer change vice-captains or sport captains. Ask an admin to make any changes."
           />
         </main>
       </>

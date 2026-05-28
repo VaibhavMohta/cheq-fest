@@ -8,7 +8,7 @@ import { PlayerPicker } from '@/components/shared/PlayerPicker';
 import { LineupBoard } from '@/components/lineup/LineupBoard';
 import { useRole } from '@/lib/roles';
 import { useAuth } from '@/lib/auth';
-import { useActiveEvent } from '@/lib/activeEvent';
+import { useActiveEvent, isEventLocked } from '@/lib/activeEvent';
 import { useAllEventPlayers, type PersonRow } from '@/lib/playerDirectory';
 import {
   ensureTeamMember,
@@ -32,7 +32,12 @@ import type { TeamId } from '@/types/team';
  */
 export default function LineupScreen() {
   const role = useRole();
-  const { activeEventId } = useActiveEvent();
+  const { activeEventId, event } = useActiveEvent();
+  // Lineup edits freeze for captains once the event start date arrives.
+  // Admins / super-admins bypass the lock so they can fix late-breaking
+  // changes (injuries, walkovers, etc.) once the fest is live.
+  const isAdminRole = role.is('admin');
+  const locked = !isAdminRole && isEventLocked(event);
   const captaincies = role.sportCaptainOf;
   const [selectedIdx, setSelectedIdx] = useState(0);
 
@@ -108,6 +113,20 @@ export default function LineupScreen() {
           <EmptyState
             title="No active event"
             hint="Pick an event from the top bar to see your sport."
+          />
+        </main>
+      </>
+    );
+  }
+
+  if (locked) {
+    return (
+      <>
+        <TopBar title="Edit Lineup" />
+        <main className="mx-auto max-w-[420px] pb-28">
+          <EmptyState
+            title="Lineups are locked"
+            hint="The event has started — captains can no longer shuffle rosters. Ask an admin to make any changes."
           />
         </main>
       </>

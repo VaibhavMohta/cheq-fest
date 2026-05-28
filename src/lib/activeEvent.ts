@@ -77,3 +77,14 @@ export function useActiveEvent(): {
 
   return { events, event, activeEventId, setActiveEventId, loading };
 }
+
+/**
+ * Mirror of the `isEventLocked` Firestore rule. Returns true once the
+ * event's start date has arrived — at which point captains can no
+ * longer shuffle rosters; only admins / super-admins can. A missing
+ * startDate is treated as unlocked (draft event).
+ */
+export function isEventLocked(event: { startDate: { toMillis(): number } | null } | null): boolean {
+  if (!event?.startDate) return false;
+  return event.startDate.toMillis() <= Date.now();
+}

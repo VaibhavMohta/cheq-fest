@@ -26,6 +26,15 @@ service cloud.firestore {
         get(/databases/$(database)/documents/events/$(eventId)/teams/$(teamId))
           .data.groupCaptainEmail == request.auth.token.email;
     }
+    // Event is "locked" for non-admin lineup edits once its start date
+    // has arrived. Captains can finalise rosters before the event
+    // begins, but only admins / super-admins can shuffle players once
+    // the fest is live. A missing startDate is treated as unlocked
+    // (draft event, dates not yet set).
+    function isEventLocked(eventId) {
+      let ev = get(/databases/$(database)/documents/events/$(eventId)).data;
+      return ev.startDate != null && ev.startDate <= request.time;
+    }
 
     // Cross-event roster reads needed for the `useRole()` collectionGroup
     // query that detects sport captaincy. The per-event match below
@@ -57,6 +66,7 @@ service cloud.firestore {
         allow create, delete: if isAdmin();
         allow update: if isAdmin()
                       || (isGroupCaptainOfTeam(eventId, teamId)
+                          && !isEventLocked(eventId)
                           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viceCaptainEmail']));
 
         // Roster writes come from three places:
@@ -68,10 +78,11 @@ service cloud.firestore {
         match /rosters/{sportId} {
           allow read: if true;
           allow write: if isAdmin()
-                       || isGroupCaptainOfTeam(eventId, teamId)
-                       || (isSignedIn()
-                           && get(/databases/$(database)/documents/events/$(eventId)/teams/$(teamId)/rosters/$(sportId))
-                                .data.sportCaptainEmail == request.auth.token.email);
+                       || (!isEventLocked(eventId)
+                           && (isGroupCaptainOfTeam(eventId, teamId)
+                               || (isSignedIn()
+                                   && get(/databases/$(database)/documents/events/$(eventId)/teams/$(teamId)/rosters/$(sportId))
+                                        .data.sportCaptainEmail == request.auth.token.email)));
         }
       }
 
