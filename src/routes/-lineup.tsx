@@ -50,8 +50,11 @@ export default function LineupScreen() {
   // to rosters of teams they captain.
   const isAdmin = role.is('admin');
   const isGroupCap = !isAdmin && role.is('group-cap');
-  const showAdminPicker =
-    (isAdmin || isGroupCap) && captaincies.length === 0 && !!activeEventId;
+  // Admins and Group Captains always see the full sport+team picker so
+  // they can administer rosters across the event — not just the
+  // sport(s) they happen to be Sport Captain of. Plain Sport Captains
+  // (no admin/GC role) keep using the captaincy switcher pills below.
+  const showAdminPicker = !!activeEventId && (isAdmin || isGroupCap);
   const gcTeamIds = role.groupCaptainOf;
   const [allTeams, setAllTeams] = useState<{ id: TeamId; name: string }[]>([]);
   const [allSports, setAllSports] = useState<{ id: string; name: string }[]>([]);
