@@ -48,7 +48,7 @@ export function ArenaScoreStrip({
       />
       <div className="flex flex-col items-center justify-center gap-1">
         {sportName && (
-          <span className="max-w-[120px] truncate text-center font-mono text-[9px] uppercase tracking-[0.08em] text-ink-dim">
+          <span className="break-words text-center font-mono text-[9px] uppercase tracking-[0.08em] text-ink-dim leading-tight">
             {sportName}
           </span>
         )}
@@ -85,16 +85,31 @@ function TeamBlock({
   alignRight: boolean;
   onClick?: () => void;
 }) {
-  const inner = (
+  // Stack the team logo with the team name centered underneath. Score sits
+  // to the score-strip side (right of logo for Team A, left of logo for
+  // Team B) and is vertically centered so both scores align horizontally
+  // regardless of how many lines the team name wraps to.
+  const flagAndName = (
+    <div className="flex w-16 shrink-0 flex-col items-center gap-1">
+      <Flag name={name} color={color} />
+      <span className="text-center font-display text-[10px] uppercase leading-tight tracking-[0.06em] group-hover:underline underline-offset-2">
+        {name}
+      </span>
+    </div>
+  );
+  const scoreEl = (
+    <span className="font-display text-3xl leading-none tabular-nums">{score}</span>
+  );
+
+  const inner = alignRight ? (
     <>
-      {!alignRight && <Flag name={name} color={color} />}
-      <div className="flex flex-col" style={{ alignItems: alignRight ? 'flex-end' : 'flex-start' }}>
-        <span className="font-display text-xs uppercase tracking-[0.08em] underline-offset-2 group-hover:underline">
-          {name}
-        </span>
-        <span className="font-display text-3xl leading-none tabular-nums">{score}</span>
-      </div>
-      {alignRight && <Flag name={name} color={color} />}
+      {scoreEl}
+      {flagAndName}
+    </>
+  ) : (
+    <>
+      {flagAndName}
+      {scoreEl}
     </>
   );
 

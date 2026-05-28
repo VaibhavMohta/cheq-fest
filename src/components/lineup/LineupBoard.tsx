@@ -10,9 +10,12 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import Fuse from 'fuse.js';
+import clsx from 'clsx';
 import { Avatar } from '@/components/shared/Avatar';
 import {
   BUCKETS,
+  BUCKET_ACCENT,
+  BUCKET_LABEL,
   applyMove,
   canDrop,
   findBucket,
@@ -113,6 +116,150 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
 
   const activePlayer = activeUid ? byId.get(activeUid) ?? null : null;
 
+  // Which bucket's "+ Add" search panel is currently expanded. Only one
+  // can be open at a time so the screen doesn't blow up.
+  const [quickAddBucket, setQuickAddBucket] = useState<BucketId | null>(null);
+  const [quickAddQuery, setQuickAddQuery] = useState('');
+
+  const performMove = useCallback(
+    (uid: string, to: BucketId) => {
+      const from = findBucket(state, uid);
+      const player = byId.get(uid);
+      if (!from || !player || from === to) return;
+      const decision = canDrop({ player, from, to, state, sport });
+      if (!decision.ok) {
+        setRejectMsg(decision.reason);
+        window.setTimeout(() => setRejectMsg(null), 1800);
+        return;
+      }
+      const next = applyMove(state, uid, from, to);
+      const prev = state;
+      setState(next);
+      if (onChange) {
+        Promise.resolve(onChange(next, { uid, from, to })).catch(() => {
+          setState(prev);
+          setRejectMsg('Could not save. Reverted.');
+          window.setTimeout(() => setRejectMsg(null), 2000);
+        });
+      }
+    },
+    [byId, onChange, sport, state],
+  );
+
+  // Players eligible to add to a target bucket = everyone NOT already in
+  // that bucket, fuzzy-filtered by the per-bucket search box.
+  const quickAddCandidates = useMemo(() => {
+    if (!quickAddBucket) return [] as LineupPlayer[];
+    const inThisBucket = new Set(state[quickAddBucket]);
+    const remaining = players.filter((p) => !inThisBucket.has(p.uid));
+    const q = quickAddQuery.trim();
+    if (!q) return remaining;
+    const idx = new Fuse(remaining as LineupPlayer[], {
+      keys: ['name'],
+      threshold: 0.4,
+      ignoreLocation: true,
+      minMatchCharLength: 1,
+    });
+    return idx.search(q).map((r) => r.item);
+  }, [players, state, quickAddBucket, quickAddQuery]);
+
+  const renderQuickAdd = (bucket: BucketId) => {
+    const isOpen = quickAddBucket === bucket;
+    const accent = BUCKET_ACCENT[bucket];
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setQuickAddBucket(isOpen ? null : bucket);
+          setQuickAddQuery('');
+        }}
+        className={clsx(
+          'ml-1 shrink-0 rounded-md border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.06em] transition',
+          isOpen
+            ? 'bg-bg-elev'
+            : 'bg-bg-card hover:bg-bg-elev',
+        )}
+        style={{
+          color: isOpen ? accent : 'var(--ink-dim)',
+          borderColor: isOpen ? accent : 'var(--line)',
+        }}
+        aria-expanded={isOpen}
+      >
+        {isOpen ? '×' : '+ Add'}
+      </button>
+    );
+  };
+
+  const renderQuickAddPanel = (bucket: BucketId) => {
+    if (quickAddBucket !== bucket) return null;
+    const accent = BUCKET_ACCENT[bucket];
+    return (
+      <div
+        className="flex flex-col gap-2 rounded-xl border bg-bg px-2 py-2"
+        style={{ borderColor: 'var(--line)' }}
+      >
+        <input
+          value={quickAddQuery}
+          onChange={(e) => setQuickAddQuery(e.target.value)}
+          placeholder={`Search to add to ${BUCKET_LABEL[bucket]}…`}
+          autoFocus
+          className="w-full rounded-lg border border-line bg-bg-card px-3 py-2 text-sm placeholder:text-ink-mute focus:border-accent focus:outline-none"
+        />
+        {quickAddCandidates.length === 0 ? (
+          <p className="px-1 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-mute">
+            {quickAddQuery
+              ? 'No matches.'
+              : `Everyone is already in ${BUCKET_LABEL[bucket]}.`}
+          </p>
+        ) : (
+          <ul className="flex max-h-44 flex-col gap-1 overflow-y-auto">
+            {quickAddCandidates.slice(0, 30).map((p) => {
+              const from = findBucket(state, p.uid);
+              return (
+                <li key={p.uid}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      performMove(p.uid, bucket);
+                      setQuickAddQuery('');
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg border border-line bg-bg-card px-2 py-1.5 text-left hover:bg-bg-elev"
+                  >
+                    <Avatar
+                      name={p.name}
+                      teamId={p.teamId}
+                      size={28}
+                      isCaptain={p.isCaptain || p.isGroupCaptain}
+                      captainColor={p.isCaptain ? 'var(--accent-3)' : 'var(--gold)'}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm font-bold">
+                      {p.name}
+                    </span>
+                    {from && (
+                      <span
+                        className="shrink-0 font-mono text-[9px] uppercase tracking-[0.06em]"
+                        style={{ color: BUCKET_ACCENT[from] }}
+                      >
+                        {BUCKET_LABEL[from]}
+                      </span>
+                    )}
+                    <span
+                      aria-hidden
+                      className="shrink-0 font-mono text-[10px] uppercase tracking-[0.06em]"
+                      style={{ color: accent }}
+                    >
+                      →
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    );
+  };
+
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <header className="mx-5 mb-4 rounded-2xl border border-line bg-bg-card px-4 py-3">
@@ -150,28 +297,50 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
         </div>
       )}
 
-      <BucketSection bucket="pitch" count={state.pitch.length} cap={sport.playersOnField}>
+      <BucketSection
+        bucket="pitch"
+        count={state.pitch.length}
+        cap={sport.playersOnField}
+        headerExtra={renderQuickAdd('pitch')}
+        topPanel={renderQuickAddPanel('pitch')}
+      >
         {state.pitch.map((uid) => {
           const p = byId.get(uid);
           return p ? <DragTile key={uid} player={p} dimmed={!isMatch(uid)} /> : null;
         })}
       </BucketSection>
 
-      <BucketSection bucket="tentative" count={state.tentative.length}>
+      <BucketSection
+        bucket="tentative"
+        count={state.tentative.length}
+        headerExtra={renderQuickAdd('tentative')}
+        topPanel={renderQuickAddPanel('tentative')}
+      >
         {state.tentative.map((uid) => {
           const p = byId.get(uid);
           return p ? <DragTile key={uid} player={p} dimmed={!isMatch(uid)} /> : null;
         })}
       </BucketSection>
 
-      <BucketSection bucket="substitutes" count={state.substitutes.length} cap={sport.substitutes}>
+      <BucketSection
+        bucket="substitutes"
+        count={state.substitutes.length}
+        cap={sport.substitutes}
+        headerExtra={renderQuickAdd('substitutes')}
+        topPanel={renderQuickAddPanel('substitutes')}
+      >
         {state.substitutes.map((uid) => {
           const p = byId.get(uid);
           return p ? <DragTile key={uid} player={p} dimmed={!isMatch(uid)} /> : null;
         })}
       </BucketSection>
 
-      <BucketSection bucket="notPlaying" count={state.notPlaying.length}>
+      <BucketSection
+        bucket="notPlaying"
+        count={state.notPlaying.length}
+        headerExtra={renderQuickAdd('notPlaying')}
+        topPanel={renderQuickAddPanel('notPlaying')}
+      >
         {state.notPlaying.map((uid) => {
           const p = byId.get(uid);
           return p ? <DragTile key={uid} player={p} dimmed={!isMatch(uid)} /> : null;

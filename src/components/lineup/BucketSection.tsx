@@ -8,10 +8,24 @@ type Props = {
   count: number;
   /** When set, "n / cap" is displayed and a dashed placeholder fills empty slots. */
   cap?: number;
+  /** Optional inline content rendered between the header and the
+   *  player grid — used by LineupBoard to put a per-bucket search +
+   *  tap-to-add panel under the bucket title. */
+  topPanel?: ReactNode;
+  /** Optional content rendered on the right side of the bucket header
+   *  (next to the count). Used for a "+ Add" toggle button. */
+  headerExtra?: ReactNode;
   children: ReactNode;
 };
 
-export function BucketSection({ bucket, count, cap, children }: Props) {
+export function BucketSection({
+  bucket,
+  count,
+  cap,
+  topPanel,
+  headerExtra,
+  children,
+}: Props) {
   const { isOver, setNodeRef } = useDroppable({ id: bucket });
   const accent = BUCKET_ACCENT[bucket];
 
@@ -39,7 +53,9 @@ export function BucketSection({ bucket, count, cap, children }: Props) {
         >
           {cap !== undefined ? `${count} / ${cap}` : count}
         </span>
+        {headerExtra}
       </header>
+      {topPanel && <div className="px-4 pb-2">{topPanel}</div>}
       <div className="grid grid-cols-4 gap-2 px-3 pb-3">
         {children}
         {cap !== undefined &&
