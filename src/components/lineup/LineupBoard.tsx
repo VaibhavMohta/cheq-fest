@@ -412,6 +412,7 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
               player={p}
               dimmed={!isMatch(uid)}
               onTap={() => setMoveTargetUid(uid)}
+              onRemove={() => performMove(uid, 'notPlaying')}
             />
           ) : null;
         })}
@@ -431,6 +432,7 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
               player={p}
               dimmed={!isMatch(uid)}
               onTap={() => setMoveTargetUid(uid)}
+              onRemove={() => performMove(uid, 'notPlaying')}
             />
           ) : null;
         })}
@@ -451,6 +453,7 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
               player={p}
               dimmed={!isMatch(uid)}
               onTap={() => setMoveTargetUid(uid)}
+              onRemove={() => performMove(uid, 'notPlaying')}
             />
           ) : null;
         })}
@@ -464,6 +467,8 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
       >
         {state.notPlaying.map((uid) => {
           const p = byId.get(uid);
+          // No × on notPlaying tiles — they're already off the playing
+          // roster. Tap or drag to put them back in if needed.
           return p ? (
             <DragTile
               key={uid}
