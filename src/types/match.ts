@@ -28,6 +28,11 @@ export type MatchState = {
 };
 
 export type MatchDoc = {
+  /** Sequential per-event match number assigned on creation (#1, #2, ...).
+   *  Used as the human-friendly handle across screens. Optional for
+   *  back-compat with matches created before this field existed — a
+   *  client-side backfill runs in MatchesTab to fill them in. */
+  matchNumber?: number | null;
   sportId: string;
   teamAId: TeamId;
   teamBId: TeamId;

@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Timestamp,
   addDoc,
   deleteDoc,
-  doc,
   getDoc,
   getDocs,
   increment,
@@ -136,8 +135,22 @@ function MatchesTabInner({
        *  undefined = use the per-round override or sport default. */
       points?: { win: number; draw: number; loss: number } | null;
     }) => {
+      // Compute the next per-event match number = max(existing) + 1.
+      // Falls back to count + 1 if all existing rows lack matchNumber
+      // (legacy data). Atomic enough for an admin tool — a write race
+      // between two admin tabs would just leave a duplicate number,
+      // which the UI tolerates.
+      const allSnap = await getDocs(matchesCol(eventId));
+      let maxNumber = 0;
+      for (const d of allSnap.docs) {
+        const n = (d.data() as { matchNumber?: number }).matchNumber;
+        if (typeof n === 'number' && n > maxNumber) maxNumber = n;
+      }
+      const nextNumber = (maxNumber || allSnap.size) + 1;
+
       await addDoc(matchesCol(eventId), {
         ...args,
+        matchNumber: nextNumber,
         refereeUids: [],
         state: emptyMatchState(),
         status: 'scheduled' satisfies MatchStatus,
@@ -151,6 +164,46 @@ function MatchesTabInner({
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: matchesQk(eventId) }),
   });
+
+  // Backfill matchNumber for any legacy match docs that pre-date the
+  // field. Runs once when MatchesTab loads and finds gaps; ordered by
+  // createdAt so older matches get the lower numbers naturally.
+  const backfillMatchNumbers = useMutation({
+    mutationFn: async () => {
+      const snap = await getDocs(matchesCol(eventId));
+      const docs = snap.docs.map((d) => ({
+        ref: d.ref,
+        data: d.data() as MatchDoc & { createdAt?: Timestamp | null },
+      }));
+      const missing = docs.filter((d) => typeof d.data.matchNumber !== 'number');
+      if (missing.length === 0) return 0;
+      // Sort missing by createdAt asc so earliest gets lowest number.
+      missing.sort((a, b) => {
+        const at = a.data.createdAt?.toMillis?.() ?? 0;
+        const bt = b.data.createdAt?.toMillis?.() ?? 0;
+        return at - bt;
+      });
+      let used = docs
+        .map((d) => d.data.matchNumber)
+        .filter((n): n is number => typeof n === 'number');
+      let next = (used.length === 0 ? 0 : Math.max(...used)) + 1;
+      const batch = writeBatch(db);
+      for (const m of missing) {
+        batch.set(m.ref, { matchNumber: next }, { merge: true });
+        next += 1;
+      }
+      await batch.commit();
+      return missing.length;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: matchesQk(eventId) }),
+  });
+
+  // Kick the backfill once on mount of the tab. Idempotent — no-op if
+  // every match already has a number.
+  useEffect(() => {
+    void backfillMatchNumbers.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
 
   const updateMatch = useMutation({
     mutationFn: async (args: { id: string; patch: Partial<MatchDoc> }) => {
@@ -743,6 +796,18 @@ function MatchRow({
       >
         <span className="min-w-0 flex-1">
           <span className="block font-display text-base uppercase">
+            {typeof data.matchNumber === 'number' && (
+              <span
+                className="mr-2 rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums align-middle"
+                style={{
+                  color: 'var(--accent-2)',
+                  borderColor:
+                    'color-mix(in oklab, var(--accent-2) 40%, transparent)',
+                }}
+              >
+                #{data.matchNumber}
+              </span>
+            )}
             {teamNameFor(data.teamAId, teams)} <span className="text-ink-dim">vs</span> {teamNameFor(data.teamBId, teams)}
           </span>
           <span className="block font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">

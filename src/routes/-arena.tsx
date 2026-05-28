@@ -91,6 +91,7 @@ export default function ArenaScreen() {
           teamBColor: b?.color ?? '',
           sportId: data.sportId,
           sportName: sp?.name ?? data.sportId,
+          matchNumber: data.matchNumber ?? null,
           status: data.status,
           scheduledStart: data.scheduledStart ?? null,
         };

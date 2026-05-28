@@ -19,6 +19,10 @@ export type SwitcherMatch = {
   /** Display name of the sport (e.g. "Badminton — Men's Singles").
    *  Caller resolves from the sport doc; falls back to sportId. */
   sportName?: string;
+  /** Sequential per-event match number (#1, #2, ...). Rendered as a
+   *  prefix badge on the pill so admins can refer to matches by
+   *  number across screens. */
+  matchNumber?: number | null;
   status: MatchStatus;
   /** Scheduled start time; null for unscheduled. Used by the switcher
    *  to show "10:30" / "Tue 10:30" etc., and by the parent to sort
@@ -50,11 +54,26 @@ export function MatchSwitcher({ matches, current, onChange }: Props) {
               active ? 'border-accent bg-bg-elev' : 'border-line bg-bg-card',
             )}
           >
-            {/* Sport name + start time on the top row — small mono label so
-                viewers see "what" and "when" before the team matchup. */}
+            {/* Match number + sport name + start time on the top row.
+                Number is the human-friendly handle ("Match #12") that
+                admins can call out when coordinating across screens. */}
             <span className="flex items-center justify-between gap-3 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-dim">
-              <span className="max-w-[160px] truncate">
-                {m.sportName ?? m.sportId}
+              <span className="flex min-w-0 items-center gap-1.5">
+                {typeof m.matchNumber === 'number' && (
+                  <span
+                    className="shrink-0 rounded-md border px-1 py-px font-mono text-[9px] font-bold tabular-nums"
+                    style={{
+                      color: 'var(--accent-2)',
+                      borderColor:
+                        'color-mix(in oklab, var(--accent-2) 40%, transparent)',
+                    }}
+                  >
+                    #{m.matchNumber}
+                  </span>
+                )}
+                <span className="max-w-[140px] truncate">
+                  {m.sportName ?? m.sportId}
+                </span>
               </span>
               <span className="shrink-0 tabular-nums">
                 {formatMatchTime(m.scheduledStart ?? null)}
