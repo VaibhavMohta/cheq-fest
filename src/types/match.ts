@@ -40,6 +40,11 @@ export type MatchDoc = {
   winnerTeamId: TeamId | null;
   pointsAwardedAt: Timestamp | null;
   createdAt: Timestamp | null;
+  /** Optional tournament tags. `null` = ungrouped / unlabelled (the
+   *  classic flat-list behaviour). Set when admin defines groups/rounds
+   *  on the sport. */
+  group: string | null;
+  round: string | null;
 };
 
 export type RefereeEventDoc = {

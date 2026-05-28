@@ -109,6 +109,31 @@ export type SportDoc = {
   // ── Provenance ──────────────────────────────────────────────────────
   /** Per-field AI confidence after a rulebook parse. */
   aiConfidence?: Record<string, Confidence>;
+
+  // ── Tournament structure (all optional) ─────────────────────────────
+  /** Per-sport groups + rounds. `null` / missing = flat list (the
+   *  classic behaviour). Each sport defines its own groups; football's
+   *  Group A is unrelated to cricket's Group A. */
+  tournament?: TournamentConfig | null;
+};
+
+/** Per-sport tournament setup. Groups + rounds are independent; admin
+ *  picks how to combine them when creating matches (or via the
+ *  round-robin generator). */
+export type TournamentConfig = {
+  /** Group definitions. Stable `id` (e.g. "A", "B") so match docs
+   *  reference it without coupling to the display name. */
+  groups: TournamentGroup[];
+  /** Ordered round labels — purely cosmetic tags on the match doc.
+   *  Defaults `["Group", "QF", "SF", "F"]` when first created. */
+  rounds: string[];
+};
+
+export type TournamentGroup = {
+  id: string;
+  name: string;
+  /** Team ids that participate in this group. */
+  teamIds: string[];
 };
 
 export function defaultSport(name: string): SportDoc {

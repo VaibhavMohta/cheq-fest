@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { onSnapshot, orderBy, query } from 'firebase/firestore';
 import clsx from 'clsx';
 import { createFileRoute } from '@tanstack/react-router';
@@ -8,91 +8,249 @@ import { EventBar } from '@/components/shared/EventBar';
 import { LeaderboardRow } from '@/components/leaderboard/LeaderboardRow';
 import { useActiveEvent } from '@/lib/activeEvent';
 import { useLeaderboardTrend } from '@/lib/leaderboardTrend';
-import { teamsCol } from '@/lib/db';
+import { matchesCol, sportsCol, teamsCol } from '@/lib/db';
 import type { TeamDoc } from '@/types/player';
+import type { MatchDoc } from '@/types/match';
+import type { SportDoc } from '@/types/sport';
+import { aggregateStandings, tiedTeamIds, type TeamStanding } from '@/lib/tournament';
 
 export const Route = createFileRoute('/leaderboard')({
   component: LeaderboardScreen,
 });
 
-// Sport pills stay static for now. The "Overall" filter is the only one
-// with real data — per-sport points denorm is a follow-up. The others
-// render as disabled "Coming soon" instead of pretending they work.
-const SPORTS = ['Overall', 'Football', 'Cricket', 'Badminton', 'Chess'] as const;
-type SportFilter = (typeof SPORTS)[number];
-
 type TeamRow = TeamDoc & { id: string };
+type SportRow = SportDoc & { id: string };
+type MatchRow = MatchDoc & { id: string };
 
 function LeaderboardScreen() {
-  const [filter, setFilter] = useState<SportFilter>('Overall');
   const { activeEventId } = useActiveEvent();
-  const [teams, setTeams] = useState<TeamRow[]>([]);
-  const [loaded, setLoaded] = useState(false);
 
+  // "" = Overall (across all sports). Any other value is a sportId.
+  const [sportFilter, setSportFilter] = useState<string>('');
+  // "" = All teams. Any other value is a group id within the picked sport.
+  const [groupFilter, setGroupFilter] = useState<string>('');
+
+  const [teams, setTeams] = useState<TeamRow[]>([]);
+  const [teamsLoaded, setTeamsLoaded] = useState(false);
+  const [sports, setSports] = useState<SportRow[]>([]);
+  const [sportsLoaded, setSportsLoaded] = useState(false);
+  const [matches, setMatches] = useState<MatchRow[]>([]);
+  const [matchesLoaded, setMatchesLoaded] = useState(false);
+
+  // Subscribe to teams (for overall totalPoints view + name/color
+  // lookup in every view).
   useEffect(() => {
     if (!activeEventId) {
       setTeams([]);
-      setLoaded(true);
+      setTeamsLoaded(true);
       return;
     }
-    setLoaded(false);
+    setTeamsLoaded(false);
     const q = query(teamsCol(activeEventId), orderBy('totalPoints', 'desc'));
     return onSnapshot(
       q,
       (snap) => {
         setTeams(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setLoaded(true);
+        setTeamsLoaded(true);
       },
       () => {
         setTeams([]);
-        setLoaded(true);
+        setTeamsLoaded(true);
       },
     );
   }, [activeEventId]);
 
-  // Live current ranking (1-indexed). Ties carry the same rank — purely
-  // cosmetic since we sort by totalPoints desc; not changing the row
-  // order, just labelling.
-  const ranked = teams.map((t, i) => ({ id: t.id, rank: i + 1 }));
-  const { trendFor, resetBaseline, hasBaseline } = useLeaderboardTrend(
-    activeEventId,
-    ranked,
+  // Subscribe to sports (for the per-sport pill labels + group toggles
+  // + points table when aggregating).
+  useEffect(() => {
+    if (!activeEventId) {
+      setSports([]);
+      setSportsLoaded(true);
+      return;
+    }
+    setSportsLoaded(false);
+    return onSnapshot(
+      sportsCol(activeEventId),
+      (snap) => {
+        setSports(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setSportsLoaded(true);
+      },
+      () => {
+        setSports([]);
+        setSportsLoaded(true);
+      },
+    );
+  }, [activeEventId]);
+
+  // Subscribe to matches — only needed when a sport filter is active
+  // (overall view uses team.totalPoints directly).
+  useEffect(() => {
+    if (!activeEventId || !sportFilter) {
+      setMatches([]);
+      setMatchesLoaded(true);
+      return;
+    }
+    setMatchesLoaded(false);
+    return onSnapshot(
+      matchesCol(activeEventId),
+      (snap) => {
+        setMatches(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setMatchesLoaded(true);
+      },
+      () => {
+        setMatches([]);
+        setMatchesLoaded(true);
+      },
+    );
+  }, [activeEventId, sportFilter]);
+
+  // Per-sport standings derived live. Overall view uses the existing
+  // teams query (sorted by totalPoints) so we don't have to re-aggregate
+  // there.
+  const sport = useMemo(
+    () => sports.find((s) => s.id === sportFilter) ?? null,
+    [sports, sportFilter],
   );
+  const teamMap = useMemo(() => {
+    const m = new Map<string, TeamRow>();
+    for (const t of teams) m.set(t.id, t);
+    return m;
+  }, [teams]);
+
+  const filteredStandings = useMemo<TeamStanding[]>(() => {
+    if (!sportFilter) return [];
+    const filtered = matches.filter(
+      (m) =>
+        m.sportId === sportFilter &&
+        m.status === 'final' &&
+        (!groupFilter || m.group === groupFilter),
+    );
+    return aggregateStandings(filtered, sport);
+  }, [matches, sportFilter, groupFilter, sport]);
+
+  const tied = useMemo(
+    () => (sportFilter ? tiedTeamIds(filteredStandings) : new Set<string>()),
+    [filteredStandings, sportFilter],
+  );
+
+  // Live current ranking (1-indexed) for the trend tracker.
+  const rankedForTrend = sportFilter
+    ? filteredStandings.map((s, i) => ({ id: s.teamId, rank: i + 1 }))
+    : teams.map((t, i) => ({ id: t.id, rank: i + 1 }));
+  const { trendFor, resetBaseline, hasBaseline } = useLeaderboardTrend(
+    activeEventId ? `${activeEventId}|${sportFilter}|${groupFilter}` : null,
+    rankedForTrend,
+  );
+
+  const loaded = teamsLoaded && sportsLoaded && (!sportFilter || matchesLoaded);
+  const availableGroups = sport?.tournament?.groups ?? [];
 
   return (
     <>
       <TopBar title="The Board" />
       <main className="mx-auto max-w-[420px] pb-28">
         <EventBar />
-        <div className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-5 pb-2">
-          {SPORTS.map((sport) => {
-            const active = filter === sport;
-            const disabled = sport !== 'Overall';
-            return (
-              <button
-                key={sport}
-                type="button"
-                disabled={disabled}
-                onClick={() => !disabled && setFilter(sport)}
-                title={disabled ? 'Per-sport leaderboard — coming soon' : undefined}
-                className={clsx(
-                  'shrink-0 rounded-full border px-4 py-2.5 font-mono text-[11px] font-bold uppercase tracking-[0.06em] transition',
-                  active
-                    ? 'border-accent-2 bg-accent-2 text-bg'
-                    : disabled
-                      ? 'cursor-not-allowed border-line bg-bg-card/40 text-ink-mute'
-                      : 'border-line bg-bg-card text-ink-dim',
-                )}
-              >
-                {sport}
-                {disabled && <span className="ml-1 opacity-60">·soon</span>}
-              </button>
-            );
-          })}
+
+        {/* Sport pill row. Overall is always the first. */}
+        <div className="-mx-1 mb-2 flex gap-2 overflow-x-auto px-5 pb-2">
+          <FilterPill active={sportFilter === ''} onClick={() => {
+            setSportFilter('');
+            setGroupFilter('');
+          }}>
+            Overall
+          </FilterPill>
+          {sports.map((s) => (
+            <FilterPill
+              key={s.id}
+              active={sportFilter === s.id}
+              onClick={() => {
+                setSportFilter(s.id);
+                setGroupFilter('');
+              }}
+            >
+              {s.name}
+            </FilterPill>
+          ))}
         </div>
+
+        {/* Group toggle row — only appears for sports with configured groups. */}
+        {sportFilter && availableGroups.length > 0 && (
+          <div className="mx-5 mb-3 flex flex-wrap gap-1.5">
+            <FilterPill active={groupFilter === ''} onClick={() => setGroupFilter('')}>
+              All teams
+            </FilterPill>
+            {availableGroups.map((g) => (
+              <FilterPill
+                key={g.id}
+                active={groupFilter === g.id}
+                onClick={() => setGroupFilter(g.id)}
+              >
+                {g.name}
+              </FilterPill>
+            ))}
+          </div>
+        )}
 
         {!loaded ? (
           <p className="px-5 text-ink-dim">Loading standings…</p>
+        ) : sportFilter ? (
+          /* Sport-specific (and optionally group-specific) view —
+             standings derived live from finalized matches. */
+          filteredStandings.length === 0 ? (
+            <EmptyState
+              title={`No ${sport?.name ?? 'sport'} results yet`}
+              hint={
+                groupFilter
+                  ? 'No matches in this group have been finalized.'
+                  : 'Standings populate once matches for this sport are finalized.'
+              }
+            />
+          ) : (
+            <>
+              <div className="mx-5 mb-2 flex items-center justify-between">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
+                  {filteredStandings.length} team{filteredStandings.length === 1 ? '' : 's'}
+                  {tied.size > 0 ? ` · ${tied.size} tied · admin breaks` : ''}
+                </p>
+                {hasBaseline && (
+                  <button
+                    type="button"
+                    onClick={resetBaseline}
+                    className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim hover:text-accent"
+                  >
+                    Reset trend
+                  </button>
+                )}
+              </div>
+              {filteredStandings.map((row, i) => {
+                const team = teamMap.get(row.teamId);
+                return (
+                  <div key={row.teamId} className="relative">
+                    {tied.has(row.teamId) && (
+                      <span
+                        aria-hidden
+                        className="absolute -left-1 top-1/2 z-10 -translate-y-1/2 rounded-md border border-ink-mute/60 bg-bg-card px-1 font-mono text-[9px] uppercase text-ink-mute"
+                        title="Tied — admin decides advancement"
+                      >
+                        =
+                      </span>
+                    )}
+                    <LeaderboardRow
+                      rank={i + 1}
+                      teamId={row.teamId}
+                      teamName={team?.name ?? row.teamId}
+                      teamColor={team?.color ?? ''}
+                      wins={row.wins}
+                      draws={row.draws}
+                      losses={row.losses}
+                      points={row.points}
+                      trend={trendFor(row.teamId)}
+                    />
+                  </div>
+                );
+              })}
+            </>
+          )
         ) : teams.length === 0 ? (
           <EmptyState
             title={activeEventId ? 'No standings yet' : 'No active event'}
@@ -106,7 +264,7 @@ function LeaderboardScreen() {
           <>
             <div className="mx-5 mb-2 flex items-center justify-between">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
-                {teams.length} team{teams.length === 1 ? '' : 's'}
+                {teams.length} team{teams.length === 1 ? '' : 's'} · overall
               </p>
               {hasBaseline && (
                 <button
@@ -133,12 +291,37 @@ function LeaderboardScreen() {
               />
             ))}
             <p className="mx-5 mt-3 font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
-              W/L/D counts will appear once per-match outcomes are
-              denormalized onto the team doc.
+              Overall = sum of all finalized matches. Tap a sport pill above
+              for per-sport W/L/D and group standings.
             </p>
           </>
         )}
       </main>
     </>
+  );
+}
+
+function FilterPill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        'shrink-0 rounded-full border px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.06em] transition',
+        active
+          ? 'border-accent-2 bg-accent-2 text-bg'
+          : 'border-line bg-bg-card text-ink-dim hover:text-ink',
+      )}
+    >
+      {children}
+    </button>
   );
 }

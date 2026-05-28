@@ -14,6 +14,7 @@ import {
 import { matchesCol, matchRef, sportsCol, teamsCol } from '@/lib/db';
 import { emptyMatchState, type MatchDoc, type MatchStatus } from '@/types/match';
 import type { TeamId } from '@/types/team';
+import type { TournamentConfig } from '@/types/sport';
 import { useAllEventPlayers, type PersonRow } from '@/lib/playerDirectory';
 import { PlayerPicker } from '@/components/shared/PlayerPicker';
 
@@ -116,6 +117,8 @@ function MatchesTabInner({
       teamBId: TeamId;
       scheduledStart: Timestamp | null;
       venue: string;
+      group?: string | null;
+      round?: string | null;
     }) => {
       await addDoc(matchesCol(eventId), {
         ...args,
@@ -125,6 +128,8 @@ function MatchesTabInner({
         winnerTeamId: null,
         pointsAwardedAt: null,
         createdAt: serverTimestamp() as unknown as Timestamp,
+        group: args.group ?? null,
+        round: args.round ?? null,
       });
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: matchesQk(eventId) }),
@@ -169,28 +174,15 @@ function MatchesTabInner({
         onCreate={(args) => create.mutate(args)}
       />
 
-      <section className="flex flex-col gap-2">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
-          {(matches.data ?? []).length} match{(matches.data ?? []).length === 1 ? '' : 'es'}
-        </h2>
-        {(matches.data ?? []).length === 0 && (
-          <p className="rounded-xl border border-dashed border-line px-4 py-6 text-center font-mono text-[11px] uppercase tracking-[0.08em] text-ink-mute">
-            No matches yet · create one above
-          </p>
-        )}
-        {(matches.data ?? []).map((m) => (
-          <MatchRow
-            key={m.id}
-            id={m.id}
-            data={m}
-            teams={availableTeams}
-            people={people}
-            peopleByUid={peopleByUid}
-            onPatch={(patch) => updateMatch.mutate({ id: m.id, patch })}
-            onRemove={() => remove.mutate(m.id)}
-          />
-        ))}
-      </section>
+      <MatchList
+        matches={matches.data ?? []}
+        sports={availableSports}
+        teams={availableTeams}
+        people={people}
+        peopleByUid={peopleByUid}
+        onPatch={(id, patch) => updateMatch.mutate({ id, patch })}
+        onRemove={(id) => remove.mutate(id)}
+      />
     </div>
   );
 }
@@ -203,7 +195,7 @@ function CreateMatchForm({
   pending,
   onCreate,
 }: {
-  sports: { id: string; name: string }[];
+  sports: { id: string; name: string; tournament?: TournamentConfig | null }[];
   teams: TeamOption[];
   eventStart: Date;
   eventEnd: Date;
@@ -214,6 +206,8 @@ function CreateMatchForm({
     teamBId: TeamId;
     scheduledStart: Timestamp | null;
     venue: string;
+    group: string | null;
+    round: string | null;
   }) => void;
 }) {
   const [sportId, setSportId] = useState<string>('');
@@ -221,7 +215,14 @@ function CreateMatchForm({
   const [teamBId, setTeamBId] = useState<TeamId | ''>('');
   const [scheduled, setScheduled] = useState<Date | null>(null);
   const [venue, setVenue] = useState<string>('');
+  const [group, setGroup] = useState<string>(''); // '' = None
+  const [round, setRound] = useState<string>(''); // '' = None
   const [error, setError] = useState<string | null>(null);
+  // Reset group/round if the picked sport has no tournament config for
+  // them — otherwise stale state from a previous pick would persist.
+  const tournament = sports.find((s) => s.id === sportId)?.tournament ?? null;
+  const availableGroups = tournament?.groups ?? [];
+  const availableRounds = tournament?.rounds ?? [];
 
   const canCreate =
     sports.length > 0 && teams.length >= 2 && sportId && teamAId && teamBId && teamAId !== teamBId;
@@ -243,7 +244,14 @@ function CreateMatchForm({
         <FormField label="Sport">
           <select
             value={sportId}
-            onChange={(e) => setSportId(e.target.value)}
+            onChange={(e) => {
+              setSportId(e.target.value);
+              // Drop any group/round picked for a different sport's
+              // tournament — those keys may be undefined for the new
+              // sport and would silently misroute.
+              setGroup('');
+              setRound('');
+            }}
             className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm uppercase focus:border-accent focus:outline-none"
           >
             <option value="">Pick…</option>
@@ -297,6 +305,46 @@ function CreateMatchForm({
           </select>
         </FormField>
       </div>
+      {(availableGroups.length > 0 || availableRounds.length > 0) && (
+        <div className="grid grid-cols-2 gap-2">
+          <FormField
+            label="Group"
+            hint={availableGroups.length === 0 ? 'None defined for this sport.' : undefined}
+          >
+            <select
+              value={group}
+              onChange={(e) => setGroup(e.target.value)}
+              disabled={availableGroups.length === 0}
+              className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm uppercase focus:border-accent focus:outline-none disabled:opacity-50"
+            >
+              <option value="">None</option>
+              {availableGroups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField
+            label="Round"
+            hint={availableRounds.length === 0 ? 'None defined for this sport.' : undefined}
+          >
+            <select
+              value={round}
+              onChange={(e) => setRound(e.target.value)}
+              disabled={availableRounds.length === 0}
+              className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm uppercase focus:border-accent focus:outline-none disabled:opacity-50"
+            >
+              <option value="">None</option>
+              {availableRounds.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        </div>
+      )}
       <FormField label="Venue">
         <TextInput value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="Ground A" />
       </FormField>
@@ -333,15 +381,172 @@ function CreateMatchForm({
             teamBId: teamBId as TeamId,
             scheduledStart: startTs,
             venue,
+            group: group || null,
+            round: round || null,
           });
           // Reset only the variable bits.
           setScheduled(null);
           setVenue('');
+          setGroup('');
+          setRound('');
         }}
       >
         {pending ? 'Creating…' : 'Create Match'}
       </Button>
     </section>
+  );
+}
+
+function MatchList({
+  matches,
+  sports,
+  teams,
+  people,
+  peopleByUid,
+  onPatch,
+  onRemove,
+}: {
+  matches: (MatchDoc & { id: string })[];
+  sports: { id: string; name: string; tournament?: TournamentConfig | null }[];
+  teams: TeamOption[];
+  people: PersonRow[];
+  peopleByUid: Map<string, PersonRow>;
+  onPatch: (id: string, patch: Partial<MatchDoc>) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [sportFilter, setSportFilter] = useState<string>(''); // '' = All
+  const [groupFilter, setGroupFilter] = useState<string>('');
+  const [roundFilter, setRoundFilter] = useState<string>('');
+
+  // Reset secondary filters when sport changes — group/round labels are
+  // sport-scoped and stale values would silently filter to nothing.
+  const setSport = (next: string) => {
+    setSportFilter(next);
+    setGroupFilter('');
+    setRoundFilter('');
+  };
+
+  const tournament = sportFilter
+    ? sports.find((s) => s.id === sportFilter)?.tournament ?? null
+    : null;
+  const availableGroups = tournament?.groups ?? [];
+  const availableRounds = tournament?.rounds ?? [];
+
+  const filtered = matches.filter((m) => {
+    if (sportFilter && m.sportId !== sportFilter) return false;
+    if (groupFilter && m.group !== groupFilter) return false;
+    if (roundFilter && m.round !== roundFilter) return false;
+    return true;
+  });
+
+  return (
+    <section className="flex flex-col gap-2">
+      {/* Sport pill row — All + each sport. */}
+      {sports.length > 0 && (
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+          <FilterPill active={sportFilter === ''} onClick={() => setSport('')}>
+            All
+          </FilterPill>
+          {sports.map((s) => (
+            <FilterPill
+              key={s.id}
+              active={sportFilter === s.id}
+              onClick={() => setSport(s.id)}
+            >
+              {s.name}
+            </FilterPill>
+          ))}
+        </div>
+      )}
+
+      {/* Group + round chips appear only when the picked sport has them. */}
+      {sportFilter && (availableGroups.length > 0 || availableRounds.length > 0) && (
+        <div className="flex flex-wrap gap-1.5">
+          {availableGroups.length > 0 && (
+            <>
+              <FilterPill active={groupFilter === ''} onClick={() => setGroupFilter('')}>
+                All groups
+              </FilterPill>
+              {availableGroups.map((g) => (
+                <FilterPill
+                  key={g.id}
+                  active={groupFilter === g.id}
+                  onClick={() => setGroupFilter(g.id)}
+                >
+                  {g.name}
+                </FilterPill>
+              ))}
+            </>
+          )}
+          {availableRounds.length > 0 && (
+            <>
+              <FilterPill active={roundFilter === ''} onClick={() => setRoundFilter('')}>
+                All rounds
+              </FilterPill>
+              {availableRounds.map((r) => (
+                <FilterPill
+                  key={r}
+                  active={roundFilter === r}
+                  onClick={() => setRoundFilter(r)}
+                >
+                  {r}
+                </FilterPill>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
+        {filtered.length} of {matches.length} match{matches.length === 1 ? '' : 'es'}
+      </h2>
+      {matches.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-line px-4 py-6 text-center font-mono text-[11px] uppercase tracking-[0.08em] text-ink-mute">
+          No matches yet · create one above
+        </p>
+      ) : filtered.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-line px-4 py-6 text-center font-mono text-[11px] uppercase tracking-[0.08em] text-ink-mute">
+          No matches match the current filters
+        </p>
+      ) : (
+        filtered.map((m) => (
+          <MatchRow
+            key={m.id}
+            id={m.id}
+            data={m}
+            teams={teams}
+            people={people}
+            peopleByUid={peopleByUid}
+            onPatch={(patch) => onPatch(m.id, patch)}
+            onRemove={() => onRemove(m.id)}
+          />
+        ))
+      )}
+    </section>
+  );
+}
+
+function FilterPill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`shrink-0 rounded-full border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.06em] transition ${
+        active
+          ? 'border-accent bg-accent text-bg'
+          : 'border-line bg-bg-card text-ink-dim hover:text-ink'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -399,6 +604,20 @@ function MatchRow({
           <span className="block font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
             {data.sportId} · {data.scheduledStart ? formatDateTime(data.scheduledStart) : 'unscheduled'} · {data.venue || 'no venue'}
           </span>
+          {(data.group || data.round) && (
+            <span className="mt-1 flex flex-wrap gap-1">
+              {data.group && (
+                <span className="rounded-md border border-accent-3/40 bg-accent-3/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-accent-3">
+                  Group {data.group}
+                </span>
+              )}
+              {data.round && (
+                <span className="rounded-md border border-accent-2/40 bg-accent-2/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-accent-2">
+                  {data.round}
+                </span>
+              )}
+            </span>
+          )}
         </span>
         <Chip variant={statusToChip(data.status)}>
           {data.status === 'live' ? 'Live' : data.status === 'final' ? 'Final' : 'Sched'}
