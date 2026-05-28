@@ -125,21 +125,45 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
     (uid: string, to: BucketId) => {
       const from = findBucket(state, uid);
       const player = byId.get(uid);
-      if (!from || !player || from === to) return;
+      // Surface every failure case so the click never looks "dead" —
+      // previously this returned silently and users couldn't tell why
+      // a tap had no effect.
+      if (!player) {
+        // eslint-disable-next-line no-console
+        console.warn('Lineup move: no player record for', uid);
+        setRejectMsg(`Player "${uid}" missing from team roster — refresh and retry.`);
+        window.setTimeout(() => setRejectMsg(null), 2200);
+        return;
+      }
+      if (!from) {
+        // eslint-disable-next-line no-console
+        console.warn('Lineup move: player not in any bucket', uid, state);
+        setRejectMsg(`${player.name} isn't in any bucket yet — refresh and retry.`);
+        window.setTimeout(() => setRejectMsg(null), 2200);
+        return;
+      }
+      if (from === to) {
+        // Already there — quietly close any open quick-add and exit.
+        return;
+      }
       const decision = canDrop({ player, from, to, state, sport });
       if (!decision.ok) {
         setRejectMsg(decision.reason);
-        window.setTimeout(() => setRejectMsg(null), 1800);
+        window.setTimeout(() => setRejectMsg(null), 2200);
         return;
       }
       const next = applyMove(state, uid, from, to);
       const prev = state;
       setState(next);
       if (onChange) {
-        Promise.resolve(onChange(next, { uid, from, to })).catch(() => {
+        Promise.resolve(onChange(next, { uid, from, to })).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error('Lineup save failed:', err);
           setState(prev);
-          setRejectMsg('Could not save. Reverted.');
-          window.setTimeout(() => setRejectMsg(null), 2000);
+          const detail =
+            err instanceof Error ? `: ${err.message}` : '';
+          setRejectMsg(`Could not save${detail}. Reverted.`);
+          window.setTimeout(() => setRejectMsg(null), 3500);
         });
       }
     },
@@ -219,11 +243,12 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
                 <li key={p.uid}>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       performMove(p.uid, bucket);
                       setQuickAddQuery('');
                     }}
-                    className="flex w-full items-center gap-2 rounded-lg border border-line bg-bg-card px-2 py-1.5 text-left hover:bg-bg-elev"
+                    className="flex w-full cursor-pointer items-center gap-2 rounded-lg border border-line bg-bg-card px-2 py-1.5 text-left transition hover:border-accent hover:bg-bg-elev active:scale-[0.99]"
                   >
                     <Avatar
                       name={p.name}
