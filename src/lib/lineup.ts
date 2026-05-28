@@ -22,7 +22,12 @@ export type LineupPlayer = {
   name: string;
   initials?: string;
   teamId: TeamId;
+  /** True if this player is the Sport Captain for the current (sport, team).
+   *  Locks the tile in the Pitch bucket. */
   isCaptain: boolean;
+  /** True if this player is the Group Captain of the team (independent of
+   *  sport). Drives a gold "C" badge in the lineup view. */
+  isGroupCaptain?: boolean;
   /** Optional sport-cap role, only relevant in lineup display. */
   sportCapOf?: string;
   googlePhotoUrl?: string | null;

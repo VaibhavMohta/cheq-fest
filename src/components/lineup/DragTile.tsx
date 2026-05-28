@@ -27,11 +27,21 @@ export function DragTile({ player, surfaceColor = 'var(--bg-card)', dimmed }: Pr
       }
     : {};
 
-  const roleLabel = player.isCaptain
-    ? { text: 'GROUP CAP', color: 'var(--gold)' }
-    : player.sportCapOf
-      ? { text: `★ ${player.sportCapOf.toUpperCase()}`, color: 'var(--accent-3)' }
-      : null;
+  // Sport Captain (locked on the pitch) → cyan "C" badge + "SPORT CAP" label.
+  // Group Captain (independent of sport) → gold "C" badge + "GROUP CAP" label.
+  // A player can be both — the sport-cap status takes the lock + cyan badge;
+  // the gold "GROUP CAP" text label is appended below in that case.
+  const isSportCap = player.isCaptain;
+  const isGroupCap = !!player.isGroupCaptain;
+  const badgeColor = isSportCap ? 'var(--accent-3)' : 'var(--gold)';
+  const badgeLabel = isSportCap ? 'Sport Captain' : 'Group Captain';
+  const roleLabel = isSportCap
+    ? { text: isGroupCap ? 'SPORT + GROUP CAP' : 'SPORT CAP', color: 'var(--accent-3)' }
+    : isGroupCap
+      ? { text: 'GROUP CAP', color: 'var(--gold)' }
+      : player.sportCapOf
+        ? { text: `★ ${player.sportCapOf.toUpperCase()}`, color: 'var(--accent-3)' }
+        : null;
 
   return (
     <button
@@ -52,7 +62,9 @@ export function DragTile({ player, surfaceColor = 'var(--bg-card)', dimmed }: Pr
         name={player.name}
         teamId={player.teamId}
         size={56}
-        isCaptain={player.isCaptain}
+        isCaptain={isSportCap || isGroupCap}
+        captainColor={badgeColor}
+        captainLabel={badgeLabel}
         googlePhotoUrl={player.googlePhotoUrl}
         adminPhotoUrl={player.adminPhotoUrl}
         surfaceColor={surfaceColor}

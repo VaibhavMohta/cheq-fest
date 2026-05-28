@@ -13,8 +13,13 @@ type Photos = {
 type Props = Photos & {
   name: string | null | undefined;
   teamId?: TeamId;
-  /** Show the gold "C" badge. */
+  /** Show the captain "C" badge. Defaults to gold (Group Captain).
+   *  Pass `captainColor` to override (e.g. cyan for Sport Captain). */
   isCaptain?: boolean;
+  /** Override the badge fill color (defaults to gold). */
+  captainColor?: string;
+  /** Override the accessibility label on the badge (default: "Captain"). */
+  captainLabel?: string;
   /** Pixel diameter of the circle. */
   size?: number;
   /** Match the surface behind the avatar so the captain badge ring blends in. */
@@ -29,6 +34,8 @@ export function Avatar({
   name,
   teamId,
   isCaptain,
+  captainColor,
+  captainLabel,
   size = 56,
   surfaceColor = 'var(--bg)',
   className,
@@ -71,7 +78,14 @@ export function Avatar({
           </span>
         )}
       </span>
-      {isCaptain && <CaptainBadge size={badgeSize} ringColor={surfaceColor} />}
+      {isCaptain && (
+        <CaptainBadge
+          size={badgeSize}
+          ringColor={surfaceColor}
+          color={captainColor}
+          label={captainLabel}
+        />
+      )}
     </span>
   );
 }

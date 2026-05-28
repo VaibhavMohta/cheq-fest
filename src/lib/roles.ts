@@ -83,12 +83,37 @@ function isValidRole(value: string | null): value is Role {
   return ROLE_PRIORITY.includes(value as Role);
 }
 
+// Operational roles (not 'guest', not 'admin', not 'super-admin') that
+// admins are allowed to act as. Admins running an event need to be able
+// to do anything a captain or referee can, so the UI surfaces every gated
+// feature for them. Server-side rules already grant admins full write
+// access across teams/rosters/matches/refereeEvents.
+const ADMIN_IMPLIED: ReadonlySet<Role> = new Set([
+  'admin',
+  'group-cap',
+  'sport-cap',
+  'referee',
+  'player',
+]);
+
 function modeImplies(activeMode: Role, query: Role): boolean {
   if (activeMode === query) return true;
-  // Super Admin implicitly has admin powers.
-  if (query === 'admin' && activeMode === 'super-admin') return true;
-  // Otherwise modes are strict — each role only implies itself. "Player" is
-  // earned via team assignment, not granted by being signed in.
+
+  // Super Admin → admin + every operational role.
+  // Admin → every operational role (but not super-admin).
+  // Deliberately we do NOT auto-imply `guest` for either — switching to
+  // "view as guest" should still flip the UI into a signed-out preview.
+  if (activeMode === 'super-admin' && query !== 'guest') return true;
+  if (activeMode === 'admin' && ADMIN_IMPLIED.has(query)) return true;
+
+  // Group Captain → Sport Captain (for their own team). GC can do
+  // anything a Sport Captain can do, scoped to teams they captain. The
+  // lineup editor and team-mgmt screens enforce the team scope; this
+  // implication just opens the UI gate.
+  if (activeMode === 'group-cap' && query === 'sport-cap') return true;
+
+  // Otherwise modes are strict — each role only implies itself. "Player"
+  // is earned via team assignment, not granted by being signed in.
   return false;
 }
 
