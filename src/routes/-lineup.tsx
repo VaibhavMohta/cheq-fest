@@ -394,15 +394,36 @@ function LineupEditor({
     const notPlaying = take(roster?.notPlaying ?? []);
 
     // Auto-park the Sport Captain on pitch before computing the
-    // remainder, so they aren't also added to notPlaying.
+    // remainder, so they aren't also added to notPlaying — but ONLY if
+    // the pitch isn't already at the configured cap. For singles
+    // (playersOnField=1), if another player is already on pitch we
+    // shunt the captain to tentative instead of pushing pitch to 2/1.
     const capEmail = roster?.sportCaptainEmail?.toLowerCase() ?? null;
+    const pitchCap = sport?.playersOnField ?? Infinity;
     if (
       capEmail &&
       !placed.has(capEmail) &&
       team.members.some((m) => m.toLowerCase() === capEmail)
     ) {
-      pitch.unshift(capEmail);
+      if (pitch.length < pitchCap) {
+        pitch.unshift(capEmail);
+      } else {
+        // Pitch is at cap — drop the captain into tentative so they
+        // stay visible to the sport captain but don't overflow the
+        // playing eleven.
+        tentative.unshift(capEmail);
+      }
       placed.add(capEmail);
+    }
+
+    // Also enforce the cap on the pitch itself in case the stored
+    // roster was persisted before a sport's playersOnField was
+    // tightened (e.g. doubles → singles). Excess players slide into
+    // tentative.
+    let overflow: string[] = [];
+    if (pitch.length > pitchCap) {
+      overflow = pitch.slice(pitchCap);
+      pitch.length = pitchCap;
     }
 
     // Anyone on the team but not yet in a bucket defaults to notPlaying.
@@ -413,7 +434,7 @@ function LineupEditor({
 
     return {
       pitch,
-      tentative,
+      tentative: [...overflow, ...tentative],
       substitutes,
       notPlaying: [...notPlaying, ...remainder],
     };
