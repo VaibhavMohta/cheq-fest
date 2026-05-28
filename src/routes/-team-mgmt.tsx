@@ -13,6 +13,7 @@ import {
   rostersCol,
   sportsCol,
   teamRef,
+  teamsCol,
   type RosterDoc,
 } from '@/lib/db';
 import { displayEmail } from '@/lib/syntheticEmail';
@@ -35,6 +36,44 @@ import type { SportDoc } from '@/types/sport';
 export default function TeamMgmtScreen() {
   const role = useRole();
   const { activeEventId } = useActiveEvent();
+  const naturalTeamIds = role.groupCaptainOf;
+  const isAdmin = role.is('admin');
+
+  // Admin override — when the active mode is admin / super-admin and the
+  // user isn't naturally a Group Captain, fetch every team in the event
+  // and let them pick one to manage. Mirrors the lineup-screen pattern.
+  const [allTeams, setAllTeams] = useState<{ id: string; name: string }[]>([]);
+  const [allTeamsLoaded, setAllTeamsLoaded] = useState(false);
+  const showAdminPicker = isAdmin && naturalTeamIds.length === 0 && !!activeEventId;
+  const [adminTeamId, setAdminTeamId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showAdminPicker || !activeEventId) {
+      setAllTeams([]);
+      setAllTeamsLoaded(false);
+      return;
+    }
+    setAllTeamsLoaded(false);
+    return onSnapshot(
+      teamsCol(activeEventId),
+      (snap) => {
+        setAllTeams(
+          snap.docs.map((d) => ({
+            id: d.id,
+            name: (d.data().name as string) ?? d.id,
+          })),
+        );
+        setAllTeamsLoaded(true);
+      },
+      () => setAllTeamsLoaded(true),
+    );
+  }, [showAdminPicker, activeEventId]);
+
+  // Default the picker to the first team as soon as data lands.
+  useEffect(() => {
+    if (adminTeamId && allTeams.some((t) => t.id === adminTeamId)) return;
+    if (allTeams.length > 0) setAdminTeamId(allTeams[0]!.id);
+  }, [adminTeamId, allTeams]);
 
   if (role.loading) {
     return (
@@ -42,21 +81,6 @@ export default function TeamMgmtScreen() {
         <TopBar title="Manage Team" />
         <main className="mx-auto max-w-[420px] pb-28">
           <p className="px-5 text-ink-dim">Checking your captaincy…</p>
-        </main>
-      </>
-    );
-  }
-
-  const teamIds = role.groupCaptainOf;
-  if (teamIds.length === 0) {
-    return (
-      <>
-        <TopBar title="Manage Team" />
-        <main className="mx-auto max-w-[420px] pb-28">
-          <EmptyState
-            title="Not a Group Captain yet"
-            hint="Once an admin assigns you as Group Captain for a team in the active event, your roster will appear here."
-          />
         </main>
       </>
     );
@@ -76,13 +100,72 @@ export default function TeamMgmtScreen() {
     );
   }
 
+  // Real Group Captain — render their teams directly.
+  if (naturalTeamIds.length > 0) {
+    return (
+      <>
+        <TopBar title="Manage Team" />
+        <main className="mx-auto flex max-w-[420px] flex-col gap-5 pb-28">
+          {naturalTeamIds.map((teamId) => (
+            <TeamBlock key={teamId} eventId={activeEventId} teamId={teamId} />
+          ))}
+        </main>
+      </>
+    );
+  }
+
+  // Admin override — picker over every team in the event.
+  if (showAdminPicker) {
+    if (allTeamsLoaded && allTeams.length === 0) {
+      return (
+        <>
+          <TopBar title="Manage Team" />
+          <main className="mx-auto max-w-[420px] pb-28">
+            <EmptyState
+              title="No teams yet"
+              hint="Create at least one team on Admin → Teams first."
+            />
+          </main>
+        </>
+      );
+    }
+    return (
+      <>
+        <TopBar title="Manage Team" />
+        <main className="mx-auto flex max-w-[420px] flex-col gap-4 pb-28">
+          <label className="mx-5 flex flex-col gap-1">
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
+              Team (admin override)
+            </span>
+            <select
+              value={adminTeamId ?? ''}
+              onChange={(e) => setAdminTeamId(e.target.value)}
+              className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm uppercase text-ink focus:border-accent focus:outline-none"
+            >
+              {allTeams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {adminTeamId && (
+            <TeamBlock eventId={activeEventId} teamId={adminTeamId} />
+          )}
+        </main>
+      </>
+    );
+  }
+
+  // Not a Group Captain and not an admin — original empty state.
   return (
     <>
       <TopBar title="Manage Team" />
-      <main className="mx-auto flex max-w-[420px] flex-col gap-5 pb-28">
-        {teamIds.map((teamId) => (
-          <TeamBlock key={teamId} eventId={activeEventId} teamId={teamId} />
-        ))}
+      <main className="mx-auto max-w-[420px] pb-28">
+        <EmptyState
+          title="Not a Group Captain yet"
+          hint="Once an admin assigns you as Group Captain for a team in the active event, your roster will appear here."
+        />
       </main>
     </>
   );
