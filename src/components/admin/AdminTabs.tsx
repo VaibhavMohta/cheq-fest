@@ -1,6 +1,14 @@
 import clsx from 'clsx';
 
-export const ADMIN_TABS = ['Event', 'Players', 'Teams', 'Sports', 'Matches', 'Rulebook'] as const;
+export const ADMIN_TABS = [
+  'Event',
+  'Players',
+  'Teams',
+  'Sports',
+  'Matches',
+  'Rulebook',
+  'Points',
+] as const;
 export type AdminTab = (typeof ADMIN_TABS)[number];
 
 type Props = {

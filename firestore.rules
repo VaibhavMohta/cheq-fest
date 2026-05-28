@@ -95,6 +95,14 @@ service cloud.firestore {
         allow create: if isSignedIn();
         allow update, delete: if false;
       }
+
+      // Bonus awards — discretionary points granted directly by admins
+      // (sportsmanship, attendance, penalties etc.). Public read so the
+      // leaderboard can show the breakdown to everyone; admin-only writes.
+      match /bonusAwards/{awardId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
     }
 
     // Users — each person can read/write their own doc; admin can write any.

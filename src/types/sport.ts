@@ -9,6 +9,13 @@ export const ARENA_TYPES = [
 ] as const;
 export type ArenaType = (typeof ARENA_TYPES)[number];
 
+/** Points awarded per match outcome for a sport. */
+export type SportPoints = {
+  win: number;
+  draw: number;
+  loss: number;
+};
+
 /**
  * Recommended fixed vocabulary of trackable events the referee console knows
  * how to render out of the box. New sports MAY use custom event names beyond
@@ -71,7 +78,7 @@ export type SportDoc = {
   substitutes: number;
   duration: string;
   format: string;
-  points: { win: number; draw: number; loss: number };
+  points: SportPoints;
   trackableEvents: TrackableEvent[];
 
   // ── Categorisation ──────────────────────────────────────────────────

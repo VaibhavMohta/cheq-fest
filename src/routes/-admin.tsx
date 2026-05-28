@@ -9,6 +9,7 @@ import { TeamsTab } from '@/components/admin/TeamsTab';
 import { SportsTab } from '@/components/admin/SportsTab';
 import { MatchesTab } from '@/components/admin/MatchesTab';
 import { RulebookTab } from '@/components/admin/RulebookTab';
+import { PointsTab } from '@/components/admin/PointsTab';
 import { useAuth } from '@/lib/auth';
 import { useRole } from '@/lib/roles';
 
@@ -72,6 +73,7 @@ export default function AdminScreen() {
         {tab === 'Sports' && <SportsTab />}
         {tab === 'Matches' && <MatchesTab />}
         {tab === 'Rulebook' && <RulebookTab />}
+        {tab === 'Points' && <PointsTab />}
       </main>
     </>
   );

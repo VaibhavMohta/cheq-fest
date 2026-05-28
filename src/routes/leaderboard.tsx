@@ -8,10 +8,11 @@ import { EventBar } from '@/components/shared/EventBar';
 import { LeaderboardRow } from '@/components/leaderboard/LeaderboardRow';
 import { useActiveEvent } from '@/lib/activeEvent';
 import { useLeaderboardTrend } from '@/lib/leaderboardTrend';
-import { matchesCol, sportsCol, teamsCol } from '@/lib/db';
+import { bonusAwardsCol, matchesCol, sportsCol, teamsCol } from '@/lib/db';
 import type { TeamDoc } from '@/types/player';
 import type { MatchDoc } from '@/types/match';
 import type { SportDoc } from '@/types/sport';
+import type { BonusAwardDoc } from '@/types/bonus';
 import { aggregateStandings, tiedTeamIds, type TeamStanding } from '@/lib/tournament';
 
 export const Route = createFileRoute('/leaderboard')({
@@ -36,6 +37,9 @@ function LeaderboardScreen() {
   const [sportsLoaded, setSportsLoaded] = useState(false);
   const [matches, setMatches] = useState<MatchRow[]>([]);
   const [matchesLoaded, setMatchesLoaded] = useState(false);
+  const [awards, setAwards] = useState<(BonusAwardDoc & { id: string })[]>([]);
+  // Which team's bonus breakdown is currently expanded (null = none).
+  const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
 
   // Subscribe to teams (for overall totalPoints view + name/color
   // lookup in every view).
@@ -82,6 +86,22 @@ function LeaderboardScreen() {
     );
   }, [activeEventId]);
 
+  // Subscribe to bonus awards (event-scoped). Always-on so the overall
+  // view can fold them into totals and the breakdown panel can render.
+  useEffect(() => {
+    if (!activeEventId) {
+      setAwards([]);
+      return;
+    }
+    return onSnapshot(
+      bonusAwardsCol(activeEventId),
+      (snap) => {
+        setAwards(snap.docs.map((d) => ({ id: d.id, ...(d.data() as BonusAwardDoc) })));
+      },
+      () => setAwards([]),
+    );
+  }, [activeEventId]);
+
   // Subscribe to matches — only needed when a sport filter is active
   // (overall view uses team.totalPoints directly).
   useEffect(() => {
@@ -117,6 +137,41 @@ function LeaderboardScreen() {
     return m;
   }, [teams]);
 
+  // Per-team bonus totals + raw award list, derived from the subscription.
+  const bonusByTeam = useMemo(() => {
+    const m = new Map<string, { total: number; awards: (BonusAwardDoc & { id: string })[] }>();
+    for (const a of awards) {
+      const prev = m.get(a.teamId) ?? { total: 0, awards: [] };
+      prev.total += a.points;
+      prev.awards.push(a);
+      m.set(a.teamId, prev);
+    }
+    // Sort each team's awards newest-first for the breakdown panel.
+    for (const v of m.values()) {
+      v.awards.sort(
+        (x, y) => (y.awardedAt?.toMillis() ?? 0) - (x.awardedAt?.toMillis() ?? 0),
+      );
+    }
+    return m;
+  }, [awards]);
+
+  // Overall view rows: re-sort teams by (match points + bonus) so the
+  // leaderboard reflects the same total it shows.
+  const overallRows = useMemo(() => {
+    return [...teams]
+      .map((t) => {
+        const bonus = bonusByTeam.get(t.id)?.total ?? 0;
+        const matchPts = t.totalPoints ?? 0;
+        return {
+          team: t,
+          matchPts,
+          bonus,
+          total: matchPts + bonus,
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+  }, [teams, bonusByTeam]);
+
   const filteredStandings = useMemo<TeamStanding[]>(() => {
     if (!sportFilter) return [];
     const filtered = matches.filter(
@@ -133,10 +188,11 @@ function LeaderboardScreen() {
     [filteredStandings, sportFilter],
   );
 
-  // Live current ranking (1-indexed) for the trend tracker.
+  // Live current ranking (1-indexed) for the trend tracker. Overall view
+  // uses the bonus-aware ordering so trends reflect the actual leaderboard.
   const rankedForTrend = sportFilter
     ? filteredStandings.map((s, i) => ({ id: s.teamId, rank: i + 1 }))
-    : teams.map((t, i) => ({ id: t.id, rank: i + 1 }));
+    : overallRows.map((r, i) => ({ id: r.team.id, rank: i + 1 }));
   const { trendFor, resetBaseline, hasBaseline } = useLeaderboardTrend(
     activeEventId ? `${activeEventId}|${sportFilter}|${groupFilter}` : null,
     rankedForTrend,
@@ -276,28 +332,129 @@ function LeaderboardScreen() {
                 </button>
               )}
             </div>
-            {teams.map((t, i) => (
-              <LeaderboardRow
-                key={t.id}
-                rank={i + 1}
-                teamId={t.id}
-                teamName={t.name}
-                teamColor={t.color}
-                wins={0}
-                draws={0}
-                losses={0}
-                points={t.totalPoints ?? 0}
-                trend={trendFor(t.id)}
-              />
-            ))}
+            {overallRows.map((row, i) => {
+              const isExpanded = expandedTeamId === row.team.id;
+              const breakdown = bonusByTeam.get(row.team.id);
+              return (
+                <div key={row.team.id} className="flex flex-col">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedTeamId((cur) =>
+                        cur === row.team.id ? null : row.team.id,
+                      )
+                    }
+                    className="text-left"
+                    aria-expanded={isExpanded}
+                  >
+                    <LeaderboardRow
+                      rank={i + 1}
+                      teamId={row.team.id}
+                      teamName={row.team.name}
+                      teamColor={row.team.color}
+                      wins={0}
+                      draws={0}
+                      losses={0}
+                      points={row.total}
+                      trend={trendFor(row.team.id)}
+                    />
+                  </button>
+                  {/* Compact split line under each row — always visible so
+                      viewers see the match-vs-bonus split at a glance. */}
+                  <div className="mx-5 -mt-2 mb-2 flex items-center gap-3 font-mono text-[9px] uppercase tracking-[0.08em]">
+                    <span className="text-ink-dim">
+                      Match · <span className="tabular-nums text-ink">{row.matchPts}</span>
+                    </span>
+                    <span className="text-ink-mute">+</span>
+                    <span
+                      style={{
+                        color:
+                          row.bonus > 0
+                            ? 'var(--accent-2)'
+                            : row.bonus < 0
+                              ? 'var(--accent)'
+                              : 'var(--ink-dim)',
+                      }}
+                    >
+                      Bonus ·{' '}
+                      <span className="tabular-nums">
+                        {row.bonus > 0 ? `+${row.bonus}` : row.bonus}
+                      </span>
+                    </span>
+                    <span className="ml-auto text-ink-mute">
+                      {isExpanded ? 'tap to hide' : 'tap for breakdown'}
+                    </span>
+                  </div>
+                  {isExpanded && (
+                    <BonusBreakdown
+                      teamName={row.team.name}
+                      awards={breakdown?.awards ?? []}
+                    />
+                  )}
+                </div>
+              );
+            })}
             <p className="mx-5 mt-3 font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
-              Overall = sum of all finalized matches. Tap a sport pill above
-              for per-sport W/L/D and group standings.
+              Total = match points + bonus awards. Bonuses are granted by
+              admins on the Points tab. Tap a row for the bonus breakdown.
             </p>
           </>
         )}
       </main>
     </>
+  );
+}
+
+function BonusBreakdown({
+  teamName,
+  awards,
+}: {
+  teamName: string;
+  awards: BonusAwardDoc[];
+}) {
+  if (awards.length === 0) {
+    return (
+      <div className="mx-5 mb-3 rounded-xl border border-dashed border-line bg-bg-card px-3 py-2 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-mute">
+        No bonus awards yet for {teamName}.
+      </div>
+    );
+  }
+  return (
+    <div className="mx-5 mb-3 rounded-xl border border-line bg-bg-card px-3 py-2">
+      <p className="mb-1 font-mono text-[9px] uppercase tracking-[0.18em] text-ink-dim">
+        {teamName} · Bonus history
+      </p>
+      <ul className="flex flex-col gap-1">
+        {awards.map((aw, i) => (
+          <li
+            key={`${aw.awardedAt?.toMillis() ?? i}-${i}`}
+            className="flex items-start gap-2 border-t border-line pt-1.5 first:border-t-0 first:pt-0"
+          >
+            <span
+              className="shrink-0 self-center font-display text-base leading-none tabular-nums"
+              style={{
+                color: aw.points >= 0 ? 'var(--accent-2)' : 'var(--accent)',
+              }}
+            >
+              {aw.points > 0 ? `+${aw.points}` : aw.points}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[12px]">
+                {aw.reason}
+                {aw.category && (
+                  <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-dim">
+                    · {aw.category}
+                  </span>
+                )}
+              </p>
+              <p className="truncate font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+                {aw.awardedAt?.toDate().toLocaleString() ?? '—'}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

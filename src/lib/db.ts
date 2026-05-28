@@ -11,6 +11,7 @@ import type { EventDoc } from '@/types/event';
 import type { SportDoc } from '@/types/sport';
 import type { MatchDoc, RefereeEventDoc } from '@/types/match';
 import type { AiUsageDoc } from '@/types/ai';
+import type { BonusAwardDoc } from '@/types/bonus';
 import type { StagedPlayerDoc, TeamDoc, UserDoc } from '@/types/player';
 import type { TeamId } from '@/types/team';
 
@@ -92,6 +93,16 @@ export const rosterRef = (
 
 export const matchesCol = (eventId: string): CollectionReference<MatchDoc> =>
   collection(db, 'events', eventId, 'matches').withConverter(converter<MatchDoc>());
+
+export const bonusAwardsCol = (eventId: string): CollectionReference<BonusAwardDoc> =>
+  collection(db, 'events', eventId, 'bonusAwards').withConverter(
+    converter<BonusAwardDoc>(),
+  );
+
+export const bonusAwardRef = (
+  eventId: string,
+  awardId: string,
+): DocumentReference<BonusAwardDoc> => doc(bonusAwardsCol(eventId), awardId);
 
 export const matchRef = (eventId: string, matchId: string): DocumentReference<MatchDoc> =>
   doc(matchesCol(eventId), matchId);
