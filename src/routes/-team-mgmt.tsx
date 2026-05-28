@@ -105,19 +105,21 @@ export default function TeamMgmtScreen() {
     );
   }
 
-  if (locked) {
-    return (
-      <>
-        <TopBar title="Manage Team" />
-        <main className="mx-auto max-w-[420px] pb-28">
-          <EmptyState
-            title="Team edits are locked"
-            hint="The event has started — captains can no longer change vice-captains or sport captains. Ask an admin to make any changes."
-          />
-        </main>
-      </>
-    );
-  }
+  // Inline banner shown above the team block(s) when the event has
+  // started. Server-side rules still reject writes; this banner just
+  // explains *why* any attempted edit will fail.
+  const lockedBanner = locked ? (
+    <div
+      className="mx-5 rounded-xl border px-3 py-2 font-mono text-[11px] uppercase tracking-[0.06em]"
+      style={{
+        color: 'var(--accent)',
+        borderColor: 'color-mix(in oklab, var(--accent) 40%, transparent)',
+        background: 'color-mix(in oklab, var(--accent) 10%, transparent)',
+      }}
+    >
+      Team edits are locked — the event has started. Ask an admin to make changes.
+    </div>
+  ) : null;
 
   // Real Group Captain — render their teams directly.
   if (naturalTeamIds.length > 0) {
@@ -125,6 +127,7 @@ export default function TeamMgmtScreen() {
       <>
         <TopBar title="Manage Team" />
         <main className="mx-auto flex max-w-[420px] flex-col gap-5 pb-28">
+          {lockedBanner}
           {naturalTeamIds.map((teamId) => (
             <TeamBlock key={teamId} eventId={activeEventId} teamId={teamId} />
           ))}
@@ -152,6 +155,7 @@ export default function TeamMgmtScreen() {
       <>
         <TopBar title="Manage Team" />
         <main className="mx-auto flex max-w-[420px] flex-col gap-4 pb-28">
+          {lockedBanner}
           <label className="mx-5 flex flex-col gap-1">
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
               Team (admin override)

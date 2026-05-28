@@ -119,20 +119,6 @@ export default function LineupScreen() {
     );
   }
 
-  if (locked) {
-    return (
-      <>
-        <TopBar title="Edit Lineup" />
-        <main className="mx-auto max-w-[420px] pb-28">
-          <EmptyState
-            title="Lineups are locked"
-            hint="The event has started — captains can no longer shuffle rosters. Ask an admin to make any changes."
-          />
-        </main>
-      </>
-    );
-  }
-
   if (captaincies.length === 0 && !showAdminPicker) {
     return (
       <>
@@ -211,6 +197,7 @@ export default function LineupScreen() {
               eventId={activeEventId}
               sportId={adminSportId}
               teamId={adminTeamId}
+              locked={locked}
             />
           )}
         </main>
@@ -251,6 +238,7 @@ export default function LineupScreen() {
           eventId={activeEventId}
           sportId={active.sportId}
           teamId={active.teamId}
+          locked={locked}
         />
       </main>
     </>
@@ -261,10 +249,15 @@ function LineupEditor({
   eventId,
   sportId,
   teamId,
+  locked = false,
 }: {
   eventId: string;
   sportId: string;
   teamId: string;
+  /** When true, the editor renders read-only with a locked banner.
+   *  Captains hit this once the event start date has arrived;
+   *  admins / super-admins always get locked=false. */
+  locked?: boolean;
 }) {
   const qc = useQueryClient();
   const role = useRole();
@@ -564,8 +557,10 @@ function LineupEditor({
   const isAdmin = role.is('admin');
   const callerIsGc =
     !!userEmail && !!gcEmail && userEmail.toLowerCase() === gcEmail;
-  const canEditGc = isAdmin;
-  const canEditSc = isAdmin || callerIsGc;
+  // Admins always bypass the start-date lock; captains lose write
+  // privileges once `locked` is true.
+  const canEditGc = isAdmin && !locked;
+  const canEditSc = (isAdmin || callerIsGc) && !locked;
 
   return (
     <>
@@ -615,13 +610,32 @@ function LineupEditor({
         />
       )}
 
+      {locked && (
+        <div
+          className="mx-5 mb-3 rounded-xl border px-3 py-2 font-mono text-[11px] uppercase tracking-[0.06em]"
+          style={{
+            color: 'var(--accent)',
+            borderColor: 'color-mix(in oklab, var(--accent) 40%, transparent)',
+            background: 'color-mix(in oklab, var(--accent) 10%, transparent)',
+          }}
+        >
+          Lineups are locked — the event has started. Ask an admin to make changes.
+        </div>
+      )}
+
       <LineupBoard
         sport={lineupSport}
         players={players}
         initial={initial}
-        onChange={async (next) => {
-          await save.mutateAsync(next);
-        }}
+        onChange={
+          locked
+            ? async () => {
+                throw new Error('Lineups are locked — ask an admin to make changes.');
+              }
+            : async (next) => {
+                await save.mutateAsync(next);
+              }
+        }
       />
     </>
   );
