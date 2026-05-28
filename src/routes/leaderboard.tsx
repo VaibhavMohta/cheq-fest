@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { onSnapshot, orderBy, query } from 'firebase/firestore';
 import clsx from 'clsx';
-import { createFileRoute } from '@tanstack/react-router';
+import { Link, createFileRoute } from '@tanstack/react-router';
 import { TopBar } from '@/components/shared/TopBar';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { EventBar } from '@/components/shared/EventBar';
@@ -206,6 +206,26 @@ function LeaderboardScreen() {
       <TopBar title="The Board" />
       <main className="mx-auto max-w-[420px] pb-28">
         <EventBar />
+
+        {/* Quick link to the player participation directory. Lives here
+            because anyone scanning standings often wants to know which
+            players are playing how many sports. */}
+        <Link
+          to="/players"
+          className="mx-5 mb-3 flex items-center justify-between gap-3 rounded-xl border border-line bg-bg-card px-3 py-2.5 transition active:scale-[0.99] hover:border-ink-dim"
+        >
+          <span className="flex flex-col">
+            <span className="font-display text-sm uppercase tracking-[0.04em]">
+              Player participation
+            </span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
+              See how many sports each player is in · tap for breakdown
+            </span>
+          </span>
+          <span aria-hidden className="font-mono text-[14px] text-ink-mute">
+            →
+          </span>
+        </Link>
 
         {/* Sport pill row. Overall is always the first. */}
         <div className="-mx-1 mb-2 flex gap-2 overflow-x-auto px-5 pb-2">

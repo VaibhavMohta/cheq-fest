@@ -134,6 +134,13 @@ export type TournamentConfig = {
   /** Ordered round labels — purely cosmetic tags on the match doc.
    *  Defaults `["Group", "QF", "SF", "F"]` when first created. */
   rounds: string[];
+  /** Optional per-round point overrides. Keyed by round label (e.g.
+   *  "F", "SF"). When present, `pointsForMatch` uses the override
+   *  for any match tagged with that round; a per-match override on
+   *  the MatchDoc still beats this. Stored as full `SportPoints`
+   *  triples to match what PointsTab writes; the resolver in
+   *  `lib/tournament.ts` still tolerates partials defensively. */
+  roundPoints?: Record<string, SportPoints>;
 };
 
 export type TournamentGroup = {
