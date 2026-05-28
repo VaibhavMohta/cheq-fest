@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -76,6 +76,55 @@ export function LineupBoard({ sport, players, initial, onChange }: Props) {
     const m = new Map<string, LineupPlayer>();
     for (const p of players) m.set(p.uid, p);
     return m;
+  }, [players]);
+
+  // Reconcile internal state with the live players list whenever team
+  // membership changes (e.g. after `ensureTeamMember` adds a captain,
+  // or an admin moves someone in/out of the team). Without this, useState
+  // would only honour `initial` at mount and any later membership change
+  // would result in "ghost" players who exist in `byId` but live in no
+  // bucket, causing clicks/drops to silently no-op.
+  useEffect(() => {
+    setState((prev) => {
+      const validUids = new Set(players.map((p) => p.uid));
+      const placed = new Set<string>();
+      const filterBucket = (b: string[]): string[] => {
+        const out: string[] = [];
+        for (const u of b) {
+          if (!validUids.has(u)) continue; // member was removed from team
+          if (placed.has(u)) continue;
+          placed.add(u);
+          out.push(u);
+        }
+        return out;
+      };
+      const nextPitch = filterBucket(prev.pitch);
+      const nextTentative = filterBucket(prev.tentative);
+      const nextSubstitutes = filterBucket(prev.substitutes);
+      const nextNotPlaying = filterBucket(prev.notPlaying);
+
+      // Anyone in `players` not yet in any bucket → drop them into
+      // notPlaying. Preserves all existing placements.
+      const missing = players
+        .map((p) => p.uid)
+        .filter((u) => !placed.has(u));
+
+      // Bail out if nothing changed — avoids triggering a re-render loop.
+      const changed =
+        nextPitch.length !== prev.pitch.length ||
+        nextTentative.length !== prev.tentative.length ||
+        nextSubstitutes.length !== prev.substitutes.length ||
+        nextNotPlaying.length !== prev.notPlaying.length ||
+        missing.length > 0;
+      if (!changed) return prev;
+
+      return {
+        pitch: nextPitch,
+        tentative: nextTentative,
+        substitutes: nextSubstitutes,
+        notPlaying: [...nextNotPlaying, ...missing],
+      };
+    });
   }, [players]);
 
   const handleDragStart = useCallback((e: DragStartEvent) => {
