@@ -33,11 +33,13 @@ import {
   bonusAwardRef,
   bonusAwardsCol,
   matchesCol,
+  refereeEventsCol,
   sportRef,
   sportsCol,
   teamRef,
   teamsCol,
 } from '@/lib/db';
+import { emptyMatchState } from '@/types/match';
 import type { SportDoc, SportPoints } from '@/types/sport';
 import type { BonusAwardDoc } from '@/types/bonus';
 import type { TeamDoc } from '@/types/player';
@@ -149,6 +151,68 @@ function PointsTabInner({ eventId }: { eventId: string }) {
   // re-run if those matches are touched again. Used to reset the
   // leaderboard to a clean slate before kickoff.
   const isSuperAdmin = role.is('super-admin');
+  // Full wipe — used to clear every trace of scoring activity. Resets
+  // each match doc to a fresh "scheduled" state with empty scores +
+  // clock + status, deletes every refereeEvents subcollection entry,
+  // zeros team totals, and wipes bonus awards. Sport rules + per-round
+  // / per-match point schemes + the match list itself are preserved
+  // so the event is ready for a clean kickoff.
+  const wipeAllMatchData = useMutation({
+    mutationFn: async () => {
+      // 1. Reset every match doc to a fresh scheduled state. Done first
+      //    so the refereeEvents wipe below has a stable parent doc set.
+      const matchSnap = await getDocs(matchesCol(eventId));
+      {
+        const batch = writeBatch(db);
+        for (const m of matchSnap.docs) {
+          batch.set(
+            m.ref,
+            {
+              status: 'scheduled',
+              state: emptyMatchState(),
+              winnerTeamId: null,
+              pointsAwardedAt: null,
+              endedAt: null,
+            },
+            { merge: true },
+          );
+        }
+        await batch.commit();
+      }
+
+      // 2. Delete every refereeEvents doc under every match. Each match
+      //    can have many, so we batch per match.
+      for (const m of matchSnap.docs) {
+        const events = await getDocs(refereeEventsCol(eventId, m.id));
+        if (events.empty) continue;
+        const evBatch = writeBatch(db);
+        for (const e of events.docs) evBatch.delete(e.ref);
+        await evBatch.commit();
+      }
+
+      // 3. Zero every team's totalPoints + wipe every bonus award.
+      {
+        const batch = writeBatch(db);
+        const teamSnap = await getDocs(teamsCol(eventId));
+        for (const t of teamSnap.docs) {
+          batch.set(
+            teamRef(eventId, t.id as TeamId),
+            { totalPoints: 0 },
+            { merge: true },
+          );
+        }
+        const awardSnap = await getDocs(bonusAwardsCol(eventId));
+        for (const a of awardSnap.docs) batch.delete(a.ref);
+        await batch.commit();
+      }
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['teams', eventId] });
+      void qc.invalidateQueries({ queryKey: ['arena', 'matches', eventId] });
+      void qc.invalidateQueries({ queryKey: ['referee'] });
+    },
+  });
+
   const resetScores = useMutation({
     mutationFn: async (args: { alsoClearBonus: boolean }) => {
       const batch = writeBatch(db);
@@ -380,6 +444,41 @@ function PointsTabInner({ eventId }: { eventId: string }) {
                 : 'Reset totals + wipe bonus awards'}
             </Button>
 
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={wipeAllMatchData.isPending}
+              onClick={() => {
+                const a = window.confirm(
+                  'WIPE ALL MATCH DATA in this event?\n\n' +
+                    'This will:\n' +
+                    '  • reset every match to a fresh "scheduled" state (score 0–0, clock 0, no winner)\n' +
+                    '  • delete every referee-event log entry under every match\n' +
+                    '  • zero every team total\n' +
+                    '  • delete every bonus award\n\n' +
+                    'Match list, team rosters, sport rules, and point schemes stay configured. Use before kickoff to start completely fresh.',
+                );
+                if (!a) return;
+                const b = window.confirm(
+                  'Final confirmation — every score, clock state, referee log, and bonus award in this event will be gone. This cannot be undone.',
+                );
+                if (!b) return;
+                wipeAllMatchData.mutate();
+              }}
+              className="!w-auto self-start !px-3 !py-1.5"
+              style={{
+                borderColor:
+                  'color-mix(in oklab, var(--accent) 80%, transparent)',
+                color: 'var(--accent)',
+                background:
+                  'color-mix(in oklab, var(--accent) 10%, transparent)',
+              }}
+            >
+              {wipeAllMatchData.isPending
+                ? 'Wiping…'
+                : 'Wipe ALL match data (full reset)'}
+            </Button>
+
             {resetScores.error && (
               <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-accent">
                 {resetScores.error instanceof Error
@@ -387,9 +486,18 @@ function PointsTabInner({ eventId }: { eventId: string }) {
                   : String(resetScores.error)}
               </p>
             )}
-            {resetScores.isSuccess && (
+            {wipeAllMatchData.error && (
+              <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-accent">
+                {wipeAllMatchData.error instanceof Error
+                  ? wipeAllMatchData.error.message
+                  : String(wipeAllMatchData.error)}
+              </p>
+            )}
+            {(resetScores.isSuccess || wipeAllMatchData.isSuccess) && (
               <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-accent-2">
-                Leaderboard reset ✓
+                {wipeAllMatchData.isSuccess
+                  ? 'All match data wiped ✓'
+                  : 'Leaderboard reset ✓'}
               </p>
             )}
           </div>
