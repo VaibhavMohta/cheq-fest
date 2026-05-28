@@ -15,6 +15,13 @@ type Props = {
   clock?: string;
   /** Match status chip. */
   status?: 'live' | 'upcoming' | 'done';
+  /** Sport label (e.g. "Badminton — Men's Doubles") rendered above the
+   *  status chip so viewers know what's being played. */
+  sportName?: string;
+  /** When provided, the corresponding team block becomes a button —
+   *  used to open the squad sheet for that side. */
+  onTeamAClick?: () => void;
+  onTeamBClick?: () => void;
 };
 
 export function ArenaScoreStrip({
@@ -26,11 +33,25 @@ export function ArenaScoreStrip({
   scoreB,
   clock,
   status = 'live',
+  sportName,
+  onTeamAClick,
+  onTeamBClick,
 }: Props) {
   return (
     <section className="mx-5 mb-3 flex items-stretch gap-2 rounded-2xl border border-line bg-bg-card p-3">
-      <TeamBlock name={teamAName} color={teamAColor} score={scoreA} alignRight={false} />
+      <TeamBlock
+        name={teamAName}
+        color={teamAColor}
+        score={scoreA}
+        alignRight={false}
+        onClick={onTeamAClick}
+      />
       <div className="flex flex-col items-center justify-center gap-1">
+        {sportName && (
+          <span className="max-w-[120px] truncate text-center font-mono text-[9px] uppercase tracking-[0.08em] text-ink-dim">
+            {sportName}
+          </span>
+        )}
         <Chip variant={status}>
           {status === 'live' ? 'Live' : status === 'done' ? 'Final' : 'Soon'}
         </Chip>
@@ -40,7 +61,13 @@ export function ArenaScoreStrip({
           </span>
         )}
       </div>
-      <TeamBlock name={teamBName} color={teamBColor} score={scoreB} alignRight={true} />
+      <TeamBlock
+        name={teamBName}
+        color={teamBColor}
+        score={scoreB}
+        alignRight={true}
+        onClick={onTeamBClick}
+      />
     </section>
   );
 }
@@ -50,23 +77,46 @@ function TeamBlock({
   color,
   score,
   alignRight,
+  onClick,
 }: {
   name: string;
   color: string;
   score: number;
   alignRight: boolean;
+  onClick?: () => void;
 }) {
+  const inner = (
+    <>
+      {!alignRight && <Flag name={name} color={color} />}
+      <div className="flex flex-col" style={{ alignItems: alignRight ? 'flex-end' : 'flex-start' }}>
+        <span className="font-display text-xs uppercase tracking-[0.08em] underline-offset-2 group-hover:underline">
+          {name}
+        </span>
+        <span className="font-display text-3xl leading-none tabular-nums">{score}</span>
+      </div>
+      {alignRight && <Flag name={name} color={color} />}
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`Show ${name} squad`}
+        className="group flex flex-1 cursor-pointer items-center gap-2 rounded-lg p-0.5 -mx-0.5 transition hover:bg-bg-elev active:scale-[0.99]"
+        style={{ justifyContent: alignRight ? 'flex-end' : 'flex-start' }}
+      >
+        {inner}
+      </button>
+    );
+  }
   return (
     <div
       className="flex flex-1 items-center gap-2"
       style={{ justifyContent: alignRight ? 'flex-end' : 'flex-start' }}
     >
-      {!alignRight && <Flag name={name} color={color} />}
-      <div className="flex flex-col" style={{ alignItems: alignRight ? 'flex-end' : 'flex-start' }}>
-        <span className="font-display text-xs uppercase tracking-[0.08em]">{name}</span>
-        <span className="font-display text-3xl leading-none tabular-nums">{score}</span>
-      </div>
-      {alignRight && <Flag name={name} color={color} />}
+      {inner}
     </div>
   );
 }

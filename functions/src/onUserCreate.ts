@@ -45,6 +45,20 @@ export const onUserCreate = auth.user().onCreate(async (user) => {
   const staged = stagedSnap.docs[0];
   const stagedData = staged?.data() ?? {};
 
+  // If a Super Admin pre-staged this user for admin promotion (via Manage
+  // Admins on a staged row), apply the `admin` custom claim during account
+  // creation so the user lands as Admin on their first session — no need
+  // for them to sign in once, get promoted, and sign back in.
+  const pendingAdmin = stagedData['pendingAdmin'] === true;
+  if (pendingAdmin) {
+    try {
+      const existing = (user.customClaims ?? {}) as Record<string, unknown>;
+      await getAuth().setCustomUserClaims(user.uid, { ...existing, admin: true });
+    } catch (err) {
+      logger.warn('onUserCreate: failed to apply pending admin claim', { uid: user.uid, err });
+    }
+  }
+
   await db.runTransaction(async (tx) => {
     tx.set(
       userRef,
@@ -56,7 +70,11 @@ export const onUserCreate = auth.user().onCreate(async (user) => {
         phone: stagedData['phone'] ?? null,
         teamId: stagedData['teamId'] ?? null,
         createdAt: FieldValue.serverTimestamp(),
-        globalRoles: [] as string[],
+        // Mirror the admin claim into the user-doc field the UI reads
+        // from. The `grantAdmin` callable does the same later in life;
+        // we do it inline here so a pre-staged admin shows up in the
+        // Manage Admins list on their first sign-in.
+        globalRoles: pendingAdmin ? (['admin'] as string[]) : ([] as string[]),
       },
       { merge: true },
     );
@@ -65,5 +83,10 @@ export const onUserCreate = auth.user().onCreate(async (user) => {
     }
   });
 
-  logger.info('Created user doc', { uid: user.uid, email, hadStagedRecord: !!staged });
+  logger.info('Created user doc', {
+    uid: user.uid,
+    email,
+    hadStagedRecord: !!staged,
+    pendingAdmin,
+  });
 });

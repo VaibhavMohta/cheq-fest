@@ -13,7 +13,12 @@ import { useActiveEvent } from '@/lib/activeEvent';
 import { useAllEventPlayers, type PersonRow } from '@/lib/playerDirectory';
 import { emailDocId, stagedPlayersCol, teamsCol, usersCol } from '@/lib/db';
 import { displayEmail } from '@/lib/syntheticEmail';
-import { grantAdmin, revokeAdmin } from '@/lib/manageAdmins';
+import {
+  grantAdmin,
+  revokeAdmin,
+  stagePendingAdmin,
+  unstagePendingAdmin,
+} from '@/lib/manageAdmins';
 import { CsvImporter, ManualAdd, type ImportedRow } from '@/components/admin/PlayerImport';
 import { colorVarFor, type TeamId } from '@/types/team';
 import type { UserDoc, TeamDoc } from '@/types/player';
@@ -138,20 +143,51 @@ function ManageAdminsScreen() {
     [admins.data],
   );
 
-  // Grant flow's candidate pool = signed-in users not already admin and
-  // not the calling super-admin themselves (you can't re-grant yourself).
+  // Grant flow's candidate pool = everyone in the directory who isn't
+  // already an admin. Both claimed (uid set) and staged (uid null) users
+  // are eligible: claimed users get the claim immediately via the
+  // grantAdmin callable; staged users get a `pendingAdmin: true` flag
+  // that `onUserCreate` honours when they first sign in.
   const grantCandidates = useMemo<PersonRow[]>(() => {
     const out: PersonRow[] = [];
     for (const p of people) {
-      if (!p.uid) continue; // staged players can't be admins yet
-      if (adminUids.has(p.uid)) continue;
+      if (p.uid && adminUids.has(p.uid)) continue;
       out.push(p);
     }
     return out;
   }, [people, adminUids]);
 
+  // Pending admins = staged users with `pendingAdmin: true` waiting for
+  // their first sign-in. Subscribed live so a fresh stage shows up here
+  // without a manual reload.
+  const [pendingAdminEmails, setPendingAdminEmails] = useState<
+    { email: string; name: string }[]
+  >([]);
+  useEffect(() => {
+    return onSnapshot(stagedPlayersCol, (snap) => {
+      setPendingAdminEmails(
+        snap.docs
+          .map((d) => d.data() as { email?: string; displayName?: string; pendingAdmin?: boolean })
+          .filter((s) => s.pendingAdmin === true && !!s.email)
+          .map((s) => ({
+            email: s.email!.toLowerCase(),
+            name: s.displayName ?? s.email!.split('@')[0]!,
+          })),
+      );
+    });
+  }, []);
+
   const grant = useMutation({
-    mutationFn: async (uid: string) => grantAdmin(uid),
+    mutationFn: async (target: PersonRow) => {
+      if (target.uid) {
+        // Claimed user — flip the claim now via the Cloud Function.
+        await grantAdmin(target.uid);
+      } else {
+        // Staged user — record the intent on their stagedPlayers doc.
+        // onUserCreate will pick it up on first sign-in.
+        await stagePendingAdmin(target.email);
+      }
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ADMINS_QK });
     },
@@ -161,6 +197,9 @@ function ManageAdminsScreen() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ADMINS_QK });
     },
+  });
+  const unstage = useMutation({
+    mutationFn: async (email: string) => unstagePendingAdmin(email),
   });
 
   if (role.loading) {
@@ -261,6 +300,65 @@ function ManageAdminsScreen() {
           )}
         </section>
 
+        {/* Pre-staged admins — users marked `pendingAdmin: true` on
+            their stagedPlayers doc. They'll get the admin claim on
+            first sign-in via onUserCreate. */}
+        {pendingAdminEmails.length > 0 && (
+          <section className="mx-5 flex flex-col gap-2">
+            <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
+              Pending sign-in ({pendingAdminEmails.length})
+            </h2>
+            <p className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+              These users will land as Admin the first time they sign in.
+            </p>
+            <ul className="flex flex-col gap-1.5">
+              {pendingAdminEmails.map((u) => {
+                const isPending = unstage.isPending && unstage.variables === u.email;
+                return (
+                  <li
+                    key={u.email}
+                    className="flex items-center gap-3 rounded-xl border border-dashed border-line bg-bg-card px-3 py-2"
+                  >
+                    <Avatar name={u.name} size={32} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold">{u.name}</p>
+                      <p className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
+                        {displayEmail(u.email)}
+                      </p>
+                    </div>
+                    <span
+                      className="rounded-md border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em]"
+                      style={{
+                        color: 'var(--gold)',
+                        borderColor: 'color-mix(in oklab, var(--gold) 40%, transparent)',
+                      }}
+                    >
+                      Pending
+                    </span>
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Cancel the pending admin promotion for ${u.name}?`,
+                          )
+                        ) {
+                          unstage.mutate(u.email);
+                        }
+                      }}
+                      className="!w-auto !px-3 !py-1.5"
+                    >
+                      {isPending ? '…' : 'Cancel'}
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
         {/* Global user pool — CSV + manual entry. Independent of any event;
             users staged here become candidates for admin promotion below
             the moment they sign in. */}
@@ -299,8 +397,8 @@ function ManageAdminsScreen() {
             Grant admin
           </h2>
           <p className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
-            The user must have signed in once — staged users can't be
-            promoted until their account exists.
+            Pick any user — staged users (haven't signed in yet) get
+            pre-staged for admin and become admins on first sign-in.
           </p>
           {peopleLoading ? (
             <p className="text-ink-dim">Loading users…</p>
@@ -310,15 +408,16 @@ function ManageAdminsScreen() {
               selected={[]}
               onChange={(next) => {
                 const target = next[0];
-                if (!target?.uid) return;
-                if (
-                  window.confirm(`Grant admin to ${target.name} (${target.email})?`)
-                ) {
-                  grant.mutate(target.uid);
+                if (!target) return;
+                const prompt = target.uid
+                  ? `Grant admin to ${target.name} (${target.email})?`
+                  : `${target.name} hasn't signed in yet. Pre-stage them as Admin — they'll land as an admin on their first sign-in?`;
+                if (window.confirm(prompt)) {
+                  grant.mutate(target);
                 }
               }}
               mode="single"
-              searchPlaceholder="Search a signed-in user…"
+              searchPlaceholder="Search any user…"
               emptyAvailableLabel="Everyone who can be admin already is."
               emptySelectedLabel="Pick a user to promote"
             />
