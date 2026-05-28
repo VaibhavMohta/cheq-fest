@@ -188,6 +188,7 @@ export default function LineupScreen() {
           </div>
           {adminSportId && adminTeamId && (
             <LineupEditor
+              key={`${activeEventId}-${adminTeamId}-${adminSportId}`}
               eventId={activeEventId}
               sportId={adminSportId}
               teamId={adminTeamId}
@@ -227,6 +228,7 @@ export default function LineupScreen() {
           </div>
         )}
         <LineupEditor
+          key={`${activeEventId}-${active.teamId}-${active.sportId}`}
           eventId={activeEventId}
           sportId={active.sportId}
           teamId={active.teamId}
