@@ -65,34 +65,44 @@ export default function ArenaScreen() {
     },
   });
   const matches = useQuery({
-    queryKey: ['arena', 'matches', activeEventId, teams.data?.size ?? 0],
-    enabled: !!activeEventId && !!teams.data,
+    queryKey: [
+      'arena',
+      'matches',
+      activeEventId,
+      teams.data?.size ?? 0,
+      sports.data?.size ?? 0,
+    ],
+    enabled: !!activeEventId && !!teams.data && !!sports.data,
     queryFn: async (): Promise<SwitcherMatch[]> => {
-      if (!activeEventId || !teams.data) return [];
+      if (!activeEventId || !teams.data || !sports.data) return [];
       const snap = await getDocs(matchesCol(activeEventId));
-      const rows: (SwitcherMatch & { _sortKey: number })[] = snap.docs.map(
-        (d) => {
-          const data = d.data();
-          const a = teams.data!.get(data.teamAId);
-          const b = teams.data!.get(data.teamBId);
-          // Sort: live (0) → upcoming/scheduled (1) → final (2)
-          const sortKey = data.status === 'live' ? 0 : data.status === 'scheduled' ? 1 : 2;
-          return {
-            id: d.id,
-            teamAId: data.teamAId,
-            teamBId: data.teamBId,
-            teamAName: a?.name ?? data.teamAId,
-            teamBName: b?.name ?? data.teamBId,
-            teamAColor: a?.color ?? '',
-            teamBColor: b?.color ?? '',
-            sportId: data.sportId,
-            status: data.status,
-            _sortKey: sortKey,
-          };
-        },
-      );
-      rows.sort((x, y) => x._sortKey - y._sortKey);
-      return rows.map(({ _sortKey, ...rest }) => rest);
+      const rows: SwitcherMatch[] = snap.docs.map((d) => {
+        const data = d.data();
+        const a = teams.data!.get(data.teamAId);
+        const b = teams.data!.get(data.teamBId);
+        const sp = sports.data!.get(data.sportId);
+        return {
+          id: d.id,
+          teamAId: data.teamAId,
+          teamBId: data.teamBId,
+          teamAName: a?.name ?? data.teamAId,
+          teamBName: b?.name ?? data.teamBId,
+          teamAColor: a?.color ?? '',
+          teamBColor: b?.color ?? '',
+          sportId: data.sportId,
+          sportName: sp?.name ?? data.sportId,
+          status: data.status,
+          scheduledStart: data.scheduledStart ?? null,
+        };
+      });
+      // Ascending by scheduledStart. Unscheduled matches go last so the
+      // most "actionable" timed matches always lead the list.
+      rows.sort((x, y) => {
+        const xt = x.scheduledStart?.toMillis() ?? Number.POSITIVE_INFINITY;
+        const yt = y.scheduledStart?.toMillis() ?? Number.POSITIVE_INFINITY;
+        return xt - yt;
+      });
+      return rows;
     },
   });
 

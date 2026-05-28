@@ -79,6 +79,20 @@ export default function RefereeScreen() {
   });
   const teamsMap = teams.data ?? new Map<string, TeamDoc>();
 
+  // Sport name lookup for the switcher pill labels.
+  const sportsList = useQuery({
+    queryKey: ['referee', 'sports', activeEventId],
+    enabled: !!activeEventId,
+    queryFn: async (): Promise<Map<string, SportDoc>> => {
+      if (!activeEventId) return new Map();
+      const snap = await getDocs(sportsCol(activeEventId));
+      const m = new Map<string, SportDoc>();
+      for (const d of snap.docs) m.set(d.id, d.data());
+      return m;
+    },
+  });
+  const sportsMap = sportsList.data ?? new Map<string, SportDoc>();
+
   // Live subscription to the match list so the switcher status chip
   // (Sched / Live / Final) updates the moment a match's status changes,
   // not just on the next page load.
@@ -98,29 +112,37 @@ export default function RefereeScreen() {
     return onSnapshot(
       q,
       (snap) => {
-        setMyMatches(
-          snap.docs.map((d) => {
-            const data = d.data();
-            const a = resolveTeam(data.teamAId, teamsMap);
-            const b = resolveTeam(data.teamBId, teamsMap);
-            return {
-              id: d.id,
-              teamAId: data.teamAId,
-              teamBId: data.teamBId,
-              teamAName: a.name,
-              teamBName: b.name,
-              teamAColor: a.color,
-              teamBColor: b.color,
-              sportId: data.sportId,
-              status: data.status,
-            };
-          }),
-        );
+        const rows: SwitcherMatch[] = snap.docs.map((d) => {
+          const data = d.data();
+          const a = resolveTeam(data.teamAId, teamsMap);
+          const b = resolveTeam(data.teamBId, teamsMap);
+          const sp = sportsMap.get(data.sportId);
+          return {
+            id: d.id,
+            teamAId: data.teamAId,
+            teamBId: data.teamBId,
+            teamAName: a.name,
+            teamBName: b.name,
+            teamAColor: a.color,
+            teamBColor: b.color,
+            sportId: data.sportId,
+            sportName: sp?.name ?? data.sportId,
+            status: data.status,
+            scheduledStart: data.scheduledStart ?? null,
+          };
+        });
+        // Ascending by scheduledStart; unscheduled go to the tail.
+        rows.sort((x, y) => {
+          const xt = x.scheduledStart?.toMillis() ?? Number.POSITIVE_INFINITY;
+          const yt = y.scheduledStart?.toMillis() ?? Number.POSITIVE_INFINITY;
+          return xt - yt;
+        });
+        setMyMatches(rows);
         setMyMatchesLoaded(true);
       },
       () => setMyMatchesLoaded(true),
     );
-  }, [activeEventId, uid, isAdmin, teamsMap]);
+  }, [activeEventId, uid, isAdmin, teamsMap, sportsMap]);
 
   const [activeId, setActiveId] = useState<string | null>(null);
   useEffect(() => {
