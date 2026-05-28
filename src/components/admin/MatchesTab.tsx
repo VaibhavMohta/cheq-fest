@@ -5,16 +5,29 @@ import {
   addDoc,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
+  increment,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
+  writeBatch,
 } from 'firebase/firestore';
-import { matchesCol, matchRef, sportsCol, teamsCol } from '@/lib/db';
+import {
+  matchesCol,
+  matchRef,
+  refereeEventsCol,
+  sportRef,
+  sportsCol,
+  teamRef,
+  teamsCol,
+} from '@/lib/db';
+import { db } from '@/lib/firebase';
+import { pointsForMatch } from '@/lib/tournament';
 import { emptyMatchState, type MatchDoc, type MatchStatus } from '@/types/match';
 import type { TeamId } from '@/types/team';
-import type { TournamentConfig } from '@/types/sport';
+import type { SportDoc, TournamentConfig } from '@/types/sport';
 import { useAllEventPlayers, type PersonRow } from '@/lib/playerDirectory';
 import { PlayerPicker } from '@/components/shared/PlayerPicker';
 
@@ -146,11 +159,67 @@ function MatchesTabInner({
     onSuccess: () => void qc.invalidateQueries({ queryKey: matchesQk(eventId) }),
   });
 
+  // Full-cascade delete: rolls back any awarded points, wipes the
+  // refereeEvents subcollection, then deletes the match doc. Idempotent
+  // on the reversal — uses pointsAwardedAt as the gate so a partial run
+  // doesn't double-subtract on retry.
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      await deleteDoc(doc(matchesCol(eventId), id));
+      const mRef = matchRef(eventId, id);
+      const mSnap = await getDoc(mRef);
+      if (!mSnap.exists()) return; // already gone — no-op
+
+      const m = mSnap.data();
+
+      // 1. Reverse awarded points. The points engine sets
+      //    `pointsAwardedAt` once it has credited team.totalPoints, so we
+      //    only reverse when that field is set. We recompute the exact
+      //    values using the same lookup chain (match.points -> round
+      //    override -> sport default) the engine used.
+      if (m.status === 'final' && m.pointsAwardedAt) {
+        const sportSnap = await getDoc(sportRef(eventId, m.sportId));
+        const sportData = sportSnap.exists() ? (sportSnap.data() as SportDoc) : null;
+        const pts = pointsForMatch(sportData, m.round, m.points ?? null);
+        const winner = m.winnerTeamId ?? null;
+        const teamAPoints =
+          winner === m.teamAId ? pts.win : winner === null ? pts.draw : pts.loss;
+        const teamBPoints =
+          winner === m.teamBId ? pts.win : winner === null ? pts.draw : pts.loss;
+
+        // Atomic decrement on both team docs. Clear pointsAwardedAt on
+        // the match too so a partial failure + retry re-runs cleanly.
+        const batch = writeBatch(db);
+        batch.set(
+          teamRef(eventId, m.teamAId as TeamId),
+          { totalPoints: increment(-teamAPoints) },
+          { merge: true },
+        );
+        batch.set(
+          teamRef(eventId, m.teamBId as TeamId),
+          { totalPoints: increment(-teamBPoints) },
+          { merge: true },
+        );
+        batch.set(mRef, { pointsAwardedAt: null }, { merge: true });
+        await batch.commit();
+      }
+
+      // 2. Wipe refereeEvents subcollection. Firestore doesn't cascade
+      //    delete on its own; walk + batch.
+      const refEvents = await getDocs(refereeEventsCol(eventId, id));
+      if (!refEvents.empty) {
+        const refBatch = writeBatch(db);
+        for (const d of refEvents.docs) refBatch.delete(d.ref);
+        await refBatch.commit();
+      }
+
+      // 3. Delete the match doc itself.
+      await deleteDoc(mRef);
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: matchesQk(eventId) }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: matchesQk(eventId) });
+      // The leaderboard reads team.totalPoints; nudge any cached query.
+      void qc.invalidateQueries({ queryKey: ['arena', 'matches', eventId] });
+    },
   });
 
   if (sports.isLoading || teams.isLoading || peopleLoading) {
@@ -751,11 +820,30 @@ function MatchRow({
               variant="ghost"
               type="button"
               onClick={() => {
-                if (window.confirm('Delete this match? (Audit log entry will be lost.)')) onRemove();
+                const teamA = teamNameFor(data.teamAId, teams);
+                const teamB = teamNameFor(data.teamBId, teams);
+                const lines = [
+                  `Delete ${teamA} vs ${teamB}?`,
+                  '',
+                  'This will:',
+                  '  • delete the match doc',
+                  '  • delete every referee event in its log',
+                ];
+                if (data.status === 'final' && data.pointsAwardedAt) {
+                  lines.push(
+                    '  • REVERSE the points awarded to both teams',
+                  );
+                }
+                lines.push('', 'This cannot be undone.');
+                if (window.confirm(lines.join('\n'))) onRemove();
               }}
               className="!w-auto !px-4 !py-2"
+              style={{
+                borderColor: 'color-mix(in oklab, var(--accent) 60%, transparent)',
+                color: 'var(--accent)',
+              }}
             >
-              Delete
+              Delete match
             </Button>
             <a
               href={`/referee?matchId=${id}`}
