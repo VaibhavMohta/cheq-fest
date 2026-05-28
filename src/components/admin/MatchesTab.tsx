@@ -695,7 +695,7 @@ function MatchRow({
           )}
         </span>
         <Chip variant={statusToChip(data.status)}>
-          {data.status === 'live' ? 'Live' : data.status === 'final' ? 'Final' : 'Sched'}
+          {data.status === 'live' ? 'Live' : data.status === 'final' ? 'Ended' : 'Sched'}
         </Chip>
       </button>
 

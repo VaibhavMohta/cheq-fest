@@ -54,7 +54,7 @@ export function MatchSwitcher({ matches, current, onChange }: Props) {
               <Dot color={colorVarFor(m.teamBColor)} />
             </span>
             <Chip variant={variant}>
-              {m.status === 'live' ? 'Live' : m.status === 'final' ? 'Final' : 'Sched'}
+              {m.status === 'live' ? 'Live' : m.status === 'final' ? 'Ended' : 'Sched'}
             </Chip>
           </button>
         );

@@ -53,7 +53,7 @@ export function ArenaScoreStrip({
           </span>
         )}
         <Chip variant={status}>
-          {status === 'live' ? 'Live' : status === 'done' ? 'Final' : 'Soon'}
+          {status === 'live' ? 'Live' : status === 'done' ? 'Ended' : 'Soon'}
         </Chip>
         {clock && (
           <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">

@@ -79,41 +79,55 @@ export default function RefereeScreen() {
   });
   const teamsMap = teams.data ?? new Map<string, TeamDoc>();
 
-  const myMatches = useQuery({
-    queryKey: ['referee', 'myMatches', uid, isAdmin, activeEventId, teamsMap.size],
-    enabled: !!uid && !!activeEventId,
-    queryFn: async (): Promise<SwitcherMatch[]> => {
-      if (!activeEventId) return [];
-      // Admins see every live + scheduled match. Refs see their assignments.
-      const constraints = isAdmin
-        ? [where('status', 'in', ['live', 'scheduled', 'final'])]
-        : [where('refereeUids', 'array-contains', uid)];
-      const snap = await getDocs(query(matchesCol(activeEventId), ...constraints));
-      return snap.docs.map((d) => {
-        const data = d.data();
-        const a = resolveTeam(data.teamAId, teamsMap);
-        const b = resolveTeam(data.teamBId, teamsMap);
-        return {
-          id: d.id,
-          teamAId: data.teamAId,
-          teamBId: data.teamBId,
-          teamAName: a.name,
-          teamBName: b.name,
-          teamAColor: a.color,
-          teamBColor: b.color,
-          sportId: data.sportId,
-          status: data.status,
-        };
-      });
-    },
-  });
+  // Live subscription to the match list so the switcher status chip
+  // (Sched / Live / Final) updates the moment a match's status changes,
+  // not just on the next page load.
+  const [myMatches, setMyMatches] = useState<SwitcherMatch[]>([]);
+  const [myMatchesLoaded, setMyMatchesLoaded] = useState(false);
+  useEffect(() => {
+    if (!activeEventId || !uid) {
+      setMyMatches([]);
+      setMyMatchesLoaded(true);
+      return;
+    }
+    setMyMatchesLoaded(false);
+    const constraints = isAdmin
+      ? [where('status', 'in', ['live', 'scheduled', 'final'])]
+      : [where('refereeUids', 'array-contains', uid)];
+    const q = query(matchesCol(activeEventId), ...constraints);
+    return onSnapshot(
+      q,
+      (snap) => {
+        setMyMatches(
+          snap.docs.map((d) => {
+            const data = d.data();
+            const a = resolveTeam(data.teamAId, teamsMap);
+            const b = resolveTeam(data.teamBId, teamsMap);
+            return {
+              id: d.id,
+              teamAId: data.teamAId,
+              teamBId: data.teamBId,
+              teamAName: a.name,
+              teamBName: b.name,
+              teamAColor: a.color,
+              teamBColor: b.color,
+              sportId: data.sportId,
+              status: data.status,
+            };
+          }),
+        );
+        setMyMatchesLoaded(true);
+      },
+      () => setMyMatchesLoaded(true),
+    );
+  }, [activeEventId, uid, isAdmin, teamsMap]);
 
   const [activeId, setActiveId] = useState<string | null>(null);
   useEffect(() => {
-    if (!myMatches.data) return;
-    if (activeId && myMatches.data.some((m) => m.id === activeId)) return;
-    setActiveId(initialMatchId ?? myMatches.data[0]?.id ?? null);
-  }, [myMatches.data, activeId, initialMatchId]);
+    if (myMatches.length === 0) return;
+    if (activeId && myMatches.some((m) => m.id === activeId)) return;
+    setActiveId(initialMatchId ?? myMatches[0]?.id ?? null);
+  }, [myMatches, activeId, initialMatchId]);
 
   if (auth.status === 'loading') {
     return (
@@ -143,7 +157,7 @@ export default function RefereeScreen() {
     );
   }
 
-  if (myMatches.isLoading) {
+  if (!myMatchesLoaded) {
     return (
       <>
         <TopBar title="Referee" />
@@ -154,7 +168,7 @@ export default function RefereeScreen() {
     );
   }
 
-  if ((myMatches.data?.length ?? 0) === 0) {
+  if (myMatches.length === 0) {
     return (
       <>
         <TopBar title="Referee" />
@@ -175,7 +189,7 @@ export default function RefereeScreen() {
       <TopBar title="Referee" />
       <main className="mx-auto max-w-[420px] pb-28">
         <MatchSwitcher
-          matches={myMatches.data ?? []}
+          matches={myMatches}
           current={activeId ?? ''}
           onChange={setActiveId}
         />
@@ -439,7 +453,7 @@ function RefereePanel({
                 borderColor: 'color-mix(in oklab, var(--accent-2) 40%, transparent)',
               }}
             >
-              Final · {a.name} {match.state.scoreA} — {match.state.scoreB} {b.name}
+              Ended · {a.name} {match.state.scoreA} — {match.state.scoreB} {b.name}
               {match.winnerTeamId &&
                 ` · ${(match.winnerTeamId === match.teamAId ? a.name : b.name)} wins`}
               {!match.winnerTeamId && match.state.scoreA === match.state.scoreB && ' · Draw'}
