@@ -14,7 +14,9 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { TopBar } from '@/components/shared/TopBar';
+import { Button } from '@/components/shared/Button';
 import { Scoreboard } from '@/components/referee/Scoreboard';
 import { MatchClock } from '@/components/referee/MatchClock';
 import { PunchGrid } from '@/components/referee/PunchGrid';
@@ -183,6 +185,7 @@ export default function RefereeScreen() {
             eventId={activeEventId}
             meUid={uid!}
             teamsMap={teamsMap}
+            isAdmin={isAdmin}
           />
         )}
         {activeEvent && (
@@ -200,12 +203,15 @@ function RefereePanel({
   eventId,
   meUid,
   teamsMap,
+  isAdmin,
 }: {
   matchId: string;
   eventId: string;
   meUid: string;
   teamsMap: Map<string, TeamDoc>;
+  isAdmin: boolean;
 }) {
+  const qc = useQueryClient();
   const [match, setMatch] = useState<MatchDoc | null>(null);
   const [events, setEvents] = useState<(RefereeEventDoc & { id: string })[]>([]);
 
@@ -235,11 +241,64 @@ function RefereePanel({
     },
   });
 
+  // End / reopen mutations (declared before any early return to keep
+  // React's hook order stable across renders).
+  const endMatch = useMutation({
+    mutationFn: async () => {
+      if (!match) throw new Error('Match not loaded yet.');
+      const a = match.state.scoreA;
+      const b = match.state.scoreB;
+      const winnerTeamId =
+        a > b ? match.teamAId : b > a ? match.teamBId : null;
+      await setDoc(
+        matchRef(eventId, matchId),
+        {
+          status: 'final',
+          winnerTeamId,
+          endedAt: serverTimestamp(),
+          state: { ...match.state, isRunning: false },
+        },
+        { merge: true },
+      );
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['referee'] });
+    },
+  });
+
+  // Admin-only reopen: flip status back to live + clear winner +
+  // pointsAwardedAt so awardPoints can run again when re-finalised.
+  // (awardPoints is idempotent on pointsAwardedAt, so clearing it is
+  // the explicit hand-off.)
+  const reopenMatch = useMutation({
+    mutationFn: async () => {
+      await setDoc(
+        matchRef(eventId, matchId),
+        {
+          status: 'live',
+          winnerTeamId: null,
+          pointsAwardedAt: null,
+        },
+        { merge: true },
+      );
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['referee'] });
+    },
+  });
+
   if (!match) {
     return <p className="px-5 text-ink-dim">Loading match…</p>;
   }
 
-  const disabled = match.status === 'final';
+  // After the match is final the live-clock and punch grid are locked
+  // (the match is over — no new events from those flows). The
+  // scoreboard +/- buttons stay editable so referees and admins can
+  // correct the final score post-stop.
+  const matchFinal = match.status === 'final';
+  const lockOps = matchFinal;
+  const lockScore = false; // scoreboard remains editable always on this page
+
   const trackable = sport.data?.trackableEvents ?? (['goal'] as const);
   const isCricket = match.sportId === 'cricket';
 
@@ -295,12 +354,12 @@ function RefereePanel({
         scoreB={match.state.scoreB}
         onAdd={(side) => void nudgeScore(side, 1)}
         onSubtract={(side) => void nudgeScore(side, -1)}
-        disabled={disabled}
+        disabled={lockScore}
       />
 
       <MatchClock
         state={match.state}
-        disabled={disabled}
+        disabled={lockOps}
         onStart={() => void appendEvent({ type: 'clock-start', side: null, value: null })}
         onPause={() => void appendEvent({ type: 'clock-pause', side: null, value: null })}
         onReset={() => void appendEvent({ type: 'clock-reset', side: null, value: null })}
@@ -318,7 +377,7 @@ function RefereePanel({
         teamBColor={b.color}
         trackable={trackable}
         showRunButtons={isCricket}
-        disabled={disabled}
+        disabled={lockOps}
         onPunch={(type, side, value) =>
           void appendEvent({ type, side, value: typeof value === 'number' ? value : null })
         }
@@ -333,6 +392,90 @@ function RefereePanel({
         meUid={meUid}
         onUndo={(id) => void undo(id)}
       />
+
+      {/* Match-end controls. Pre-final: an End Match button referees
+          tap to stop the match. Post-final: a status pill and (admin
+          only) a "Reopen scoring" button to flip status back to live
+          for corrections beyond simple score nudges. */}
+      <div className="mx-5 mt-4 flex flex-col gap-2">
+        {!matchFinal ? (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={endMatch.isPending}
+              onClick={() => {
+                const sa = match.state.scoreA;
+                const sb = match.state.scoreB;
+                const winner =
+                  sa > sb ? a.name : sb > sa ? b.name : 'a draw';
+                const msg =
+                  `End this match now?\n\n` +
+                  `Final score: ${a.name} ${sa} — ${sb} ${b.name}\n` +
+                  `Result: ${winner === 'a draw' ? 'Draw' : `${winner} wins`}\n\n` +
+                  `Status flips to FINAL and the points engine awards team points. ` +
+                  `You can still tap +/- on the scoreboard to correct after stopping.`;
+                if (window.confirm(msg)) endMatch.mutate();
+              }}
+              className="!w-full"
+              style={{
+                borderColor: 'color-mix(in oklab, var(--accent) 60%, transparent)',
+                color: 'var(--accent)',
+              }}
+            >
+              {endMatch.isPending ? 'Ending…' : 'End Match'}
+            </Button>
+            <p className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+              Referee action — locks the clock and punch grid; +/-
+              scoreboard stays editable for corrections.
+            </p>
+          </>
+        ) : (
+          <>
+            <div
+              className="rounded-xl border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em]"
+              style={{
+                color: 'var(--accent-2)',
+                borderColor: 'color-mix(in oklab, var(--accent-2) 40%, transparent)',
+              }}
+            >
+              Final · {a.name} {match.state.scoreA} — {match.state.scoreB} {b.name}
+              {match.winnerTeamId &&
+                ` · ${(match.winnerTeamId === match.teamAId ? a.name : b.name)} wins`}
+              {!match.winnerTeamId && match.state.scoreA === match.state.scoreB && ' · Draw'}
+            </div>
+            <p className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+              You can still tap +/- on the scoreboard above to adjust
+              the final score. Admins can also reopen the match if a
+              re-run is needed.
+            </p>
+            {isAdmin && (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={reopenMatch.isPending}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Reopen this match for editing? Status returns to LIVE and the points engine will re-run on the next End Match.`,
+                    )
+                  ) {
+                    reopenMatch.mutate();
+                  }
+                }}
+                className="!w-auto self-start !px-3 !py-1.5"
+              >
+                {reopenMatch.isPending ? 'Reopening…' : 'Reopen scoring (admin)'}
+              </Button>
+            )}
+          </>
+        )}
+        {(endMatch.error || reopenMatch.error) && (
+          <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-accent">
+            {String(endMatch.error ?? reopenMatch.error)}
+          </p>
+        )}
+      </div>
     </>
   );
 }
