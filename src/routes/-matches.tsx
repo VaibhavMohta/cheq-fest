@@ -309,6 +309,26 @@ function MatchRow({
   const winnerB = variant === 'ended' && match.winnerTeamId === match.teamBId;
   const isDraw = variant === 'ended' && match.winnerTeamId === null;
 
+  // Ended-match split tint: winner half (green) + loser half (red),
+  // applied across the full content column so the row reads at a
+  // glance which side won. Draws stay neutral — no tint. Mix
+  // percentage tuned low (14%) so the team-color dots and bold
+  // winner text still pop on top.
+  const WIN = '#16a34a';
+  const LOSE = '#e63946';
+  const tintLeft = winnerA ? WIN : winnerB ? LOSE : null;
+  const tintRight = winnerA ? LOSE : winnerB ? WIN : null;
+  const endedStyle =
+    tintLeft && tintRight
+      ? {
+          background: `linear-gradient(to right,
+            color-mix(in oklab, ${tintLeft} 18%, transparent) 0%,
+            color-mix(in oklab, ${tintLeft} 18%, transparent) 50%,
+            color-mix(in oklab, ${tintRight} 18%, transparent) 50%,
+            color-mix(in oklab, ${tintRight} 18%, transparent) 100%)`,
+        }
+      : undefined;
+
   // Right-hand tag varies by variant.
   const tag =
     variant === 'live'
@@ -339,7 +359,7 @@ function MatchRow({
           <SportIcon sportName={sportName} arenaType={sport?.arenaType} size={44} />
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col px-3 py-3">
+        <div className="flex min-w-0 flex-1 flex-col px-3 py-3" style={endedStyle}>
         <header className="flex items-baseline justify-between gap-2">
           <p className="truncate font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
             {sportName}
