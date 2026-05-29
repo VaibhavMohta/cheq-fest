@@ -303,18 +303,28 @@ function MatchesTabInner({
     },
   });
 
-  if (sports.isLoading || teams.isLoading || peopleLoading) {
-    return <p className="px-5 text-ink-dim">Loading…</p>;
-  }
-
   // Only keep teams that have a non-empty name. A team doc with a blank
   // name has nothing meaningful to render in a picker — silently exclude
   // it so the dropdown never shows a blank option.
-  const availableTeams: TeamOption[] = (teams.data ?? [])
-    .filter((t) => typeof t.name === 'string' && t.name.trim().length > 0)
-    .map((t) => ({ id: t.id, name: t.name }));
-  const availableSports = (sports.data ?? []).filter(
-    (s) => typeof s.name === 'string' && s.name.trim().length > 0,
+  //
+  // Computed BEFORE the early return below so the useMemo that follows
+  // sees stable hook order on every render. Both derivations use the
+  // (possibly undefined) snapshot data; while loading they're empty
+  // arrays, which is fine — only the early-return below actually
+  // short-circuits rendering, and that comes after every hook call.
+  const availableTeams: TeamOption[] = useMemo(
+    () =>
+      (teams.data ?? [])
+        .filter((t) => typeof t.name === 'string' && t.name.trim().length > 0)
+        .map((t) => ({ id: t.id, name: t.name })),
+    [teams.data],
+  );
+  const availableSports = useMemo(
+    () =>
+      (sports.data ?? []).filter(
+        (s) => typeof s.name === 'string' && s.name.trim().length > 0,
+      ),
+    [sports.data],
   );
 
   // Detect bracket groups stuck on a tie — heuristic: all matches in
@@ -322,10 +332,18 @@ function MatchesTabInner({
   // pointing at this group still have empty teamA/B. Surfaced as a
   // banner so admins know to use the inline override on the listed
   // downstream matches.
+  //
+  // Hoisted ABOVE the early return so React's hook count stays stable
+  // across renders — placing it after the early return triggered the
+  // minified error #310 "rendered more hooks than the previous render".
   const tiedGroups = useMemo(
     () => detectTiedGroups(matches.data ?? [], availableSports),
     [matches.data, availableSports],
   );
+
+  if (sports.isLoading || teams.isLoading || peopleLoading) {
+    return <p className="px-5 text-ink-dim">Loading…</p>;
+  }
 
   return (
     <div className="mx-5 flex flex-col gap-5">
