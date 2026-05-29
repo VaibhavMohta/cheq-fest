@@ -151,12 +151,55 @@ export default function RefereeScreen() {
     );
   }, [activeEventId, uid, isAdmin, teamsMap, sportsMap]);
 
+  // Filter state — sport + team. "" = no filter for either. Persisted in
+  // memory only; resets when the user leaves the route.
+  const [sportFilter, setSportFilter] = useState<string>('');
+  const [teamFilter, setTeamFilter] = useState<string>('');
+
+  // Apply the filters before rendering the switcher. A team filter
+  // matches the match if either side is the picked team.
+  const filteredMatches = useMemo(() => {
+    return myMatches.filter((m) => {
+      if (sportFilter && m.sportId !== sportFilter) return false;
+      if (teamFilter && m.teamAId !== teamFilter && m.teamBId !== teamFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [myMatches, sportFilter, teamFilter]);
+
+  // Distinct sports + teams that appear in the assigned-matches list,
+  // so the filter pills only show options that have at least one match.
+  const filterOptions = useMemo(() => {
+    const sportIds = new Set<string>();
+    const teamIds = new Set<string>();
+    for (const m of myMatches) {
+      sportIds.add(m.sportId);
+      teamIds.add(m.teamAId);
+      teamIds.add(m.teamBId);
+    }
+    const sportsArr = Array.from(sportIds)
+      .map((id) => ({ id, name: sportsMap.get(id)?.name ?? id }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const teamsArr = Array.from(teamIds)
+      .map((id) => ({ id, name: teamsMap.get(id)?.name ?? id }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return { sports: sportsArr, teams: teamsArr };
+  }, [myMatches, sportsMap, teamsMap]);
+
   const [activeId, setActiveId] = useState<string | null>(null);
   useEffect(() => {
-    if (myMatches.length === 0) return;
-    if (activeId && myMatches.some((m) => m.id === activeId)) return;
-    setActiveId(initialMatchId ?? myMatches[0]?.id ?? null);
-  }, [myMatches, activeId, initialMatchId]);
+    if (filteredMatches.length === 0) {
+      // If the active id got filtered out, clear it so the panel
+      // doesn't render against a hidden match.
+      if (activeId && !filteredMatches.some((m) => m.id === activeId)) {
+        setActiveId(null);
+      }
+      return;
+    }
+    if (activeId && filteredMatches.some((m) => m.id === activeId)) return;
+    setActiveId(initialMatchId ?? filteredMatches[0]?.id ?? null);
+  }, [filteredMatches, activeId, initialMatchId]);
 
   if (auth.status === 'loading') {
     return (
@@ -217,12 +260,74 @@ export default function RefereeScreen() {
     <>
       <TopBar title="Referee" />
       <main className="mx-auto max-w-[420px] pb-28">
+        {/* Filter rows — sport pills + team pills. Only render the
+            row when there's more than one option to choose from
+            (single-option case = noise). "All" pill clears the
+            respective filter. */}
+        {filterOptions.sports.length > 1 && (
+          <div className="-mx-1 mb-1 flex gap-1.5 overflow-x-auto px-5 pb-1">
+            <FilterPill
+              active={sportFilter === ''}
+              onClick={() => setSportFilter('')}
+            >
+              All sports
+            </FilterPill>
+            {filterOptions.sports.map((s) => (
+              <FilterPill
+                key={s.id}
+                active={sportFilter === s.id}
+                onClick={() =>
+                  setSportFilter((cur) => (cur === s.id ? '' : s.id))
+                }
+              >
+                {s.name}
+              </FilterPill>
+            ))}
+          </div>
+        )}
+        {filterOptions.teams.length > 1 && (
+          <div className="-mx-1 mb-2 flex gap-1.5 overflow-x-auto px-5 pb-1">
+            <FilterPill
+              active={teamFilter === ''}
+              onClick={() => setTeamFilter('')}
+            >
+              All teams
+            </FilterPill>
+            {filterOptions.teams.map((t) => (
+              <FilterPill
+                key={t.id}
+                active={teamFilter === t.id}
+                onClick={() =>
+                  setTeamFilter((cur) => (cur === t.id ? '' : t.id))
+                }
+              >
+                {t.name}
+              </FilterPill>
+            ))}
+          </div>
+        )}
+
         <MatchSwitcher
-          matches={myMatches}
+          matches={filteredMatches}
           current={activeId ?? ''}
           onChange={setActiveId}
         />
-        {activeId && activeEventId && (
+        {filteredMatches.length === 0 && (sportFilter || teamFilter) && (
+          <p className="mx-5 mt-3 rounded-xl border border-dashed border-line px-3 py-3 text-center font-mono text-[10px] uppercase tracking-[0.06em] text-ink-mute">
+            No matches match the current filter.
+            <button
+              type="button"
+              onClick={() => {
+                setSportFilter('');
+                setTeamFilter('');
+              }}
+              className="ml-2 text-accent hover:underline"
+            >
+              Clear filters
+            </button>
+          </p>
+        )}
+        {activeId && activeEventId && filteredMatches.length > 0 && (
           <RefereePanel
             matchId={activeId}
             eventId={activeEventId}
@@ -238,6 +343,33 @@ export default function RefereeScreen() {
         )}
       </main>
     </>
+  );
+}
+
+/** Pill-style filter button. Same look as the leaderboard pills so
+ *  the visual language stays consistent across screens. */
+function FilterPill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        'shrink-0 rounded-full border px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.06em] transition ' +
+        (active
+          ? 'border-accent-2 bg-accent-2 text-bg'
+          : 'border-line bg-bg-card text-ink-dim hover:text-ink')
+      }
+    >
+      {children}
+    </button>
   );
 }
 
