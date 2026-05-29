@@ -141,6 +141,52 @@ export type TournamentConfig = {
    *  triples to match what PointsTab writes; the resolver in
    *  `lib/tournament.ts` still tolerates partials defensively. */
   roundPoints?: Record<string, SportPoints>;
+  /** Multi-stage bracket (group → KO → final, arbitrary depth).
+   *  Optional — sports without a bracket continue to use the flat
+   *  `groups` + `rounds` model exactly as before. When set, `groups`
+   *  is auto-mirrored as the first stage so legacy callers keep
+   *  working. */
+  bracket?: BracketStage[] | null;
+};
+
+/** One column of the bracket tree. Stage IDs are stable strings
+ *  ('group', 'qf', 'sf', 'f') so match docs and slot references can
+ *  point at them without coupling to the display label. */
+export type BracketStage = {
+  id: string;
+  label: string;
+  /** 0-indexed left-to-right position in the tree. */
+  order: number;
+  groups: BracketGroup[];
+};
+
+export type BracketGroup = {
+  /** Unique within the bracket — e.g. 'A', 'QF1', 'F'. Match docs
+   *  reference this via `groupId`. */
+  id: string;
+  name: string;
+  format: 'round-robin' | 'knockout';
+  /** Top-N teams advance to the next stage. */
+  advances: number;
+  /** Where the teams come from. First stage = admin-picked
+   *  `seeded`; later stages = `advanced` slots that resolve once
+   *  upstream groups finish. */
+  source: BracketSource;
+};
+
+export type BracketSource =
+  | { kind: 'seeded'; teamIds: string[] }
+  | { kind: 'advanced'; from: AdvancedSlot[] };
+
+/** A reference to "the team that ranks N in {stageId}/{groupId}".
+ *  Resolved by the `resolveBracket` Cloud Function once the source
+ *  group finishes; before then matches show this as a placeholder
+ *  ("Winner of Group A"). */
+export type AdvancedSlot = {
+  fromStageId: string;
+  fromGroupId: string;
+  /** 1 = winner, 2 = runner-up, 3 = third place, … */
+  rank: number;
 };
 
 export type TournamentGroup = {

@@ -40,6 +40,34 @@ function teamNameFor(teamId: TeamId, teams: TeamOption[]): string {
   if (team && team.name.trim()) return team.name;
   return teamId;
 }
+
+/** Human label for a bracket slot — used while a downstream match is
+ *  waiting for its upstream group to finish. e.g. "Winner of Group A",
+ *  "Runner-up of QF1". */
+function slotLabel(
+  slot: { fromStageId: string; fromGroupId: string; rank: number } | null | undefined,
+): string {
+  if (!slot) return 'TBD';
+  const rankWord =
+    slot.rank === 1
+      ? 'Winner'
+      : slot.rank === 2
+        ? 'Runner-up'
+        : `Rank ${slot.rank}`;
+  return `${rankWord} of ${slot.fromGroupId}`;
+}
+
+/** Resolve the display label for a match team — either the real team
+ *  name (when teamAId/B is set) or the bracket-slot placeholder
+ *  (e.g. "Winner of Group A") when the slot is still unresolved. */
+function teamOrSlotLabel(
+  teamId: TeamId | '' | null | undefined,
+  slot: { fromStageId: string; fromGroupId: string; rank: number } | null | undefined,
+  teams: TeamOption[],
+): string {
+  if (teamId) return teamNameFor(teamId as TeamId, teams);
+  return slotLabel(slot);
+}
 import { Button } from '@/components/shared/Button';
 import { Chip, type ChipVariant } from '@/components/shared/Chip';
 import { DateTimePicker } from '@/components/shared/DateTimePicker';
@@ -808,13 +836,18 @@ function MatchRow({
                 #{data.matchNumber}
               </span>
             )}
-            {teamNameFor(data.teamAId, teams)} <span className="text-ink-dim">vs</span> {teamNameFor(data.teamBId, teams)}
+            {teamOrSlotLabel(data.teamAId, data.teamASlot, teams)} <span className="text-ink-dim">vs</span> {teamOrSlotLabel(data.teamBId, data.teamBSlot, teams)}
           </span>
           <span className="block font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
             {data.sportId} · {data.scheduledStart ? formatDateTime(data.scheduledStart) : 'unscheduled'} · {data.venue || 'no venue'}
           </span>
-          {(data.group || data.round) && (
+          {(data.group || data.round || data.stageId || data.manuallyResolved) && (
             <span className="mt-1 flex flex-wrap gap-1">
+              {data.stageId && (
+                <span className="rounded-md border border-accent/40 bg-accent/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-accent">
+                  {data.stageId}
+                </span>
+              )}
               {data.group && (
                 <span className="rounded-md border border-accent-3/40 bg-accent-3/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-accent-3">
                   Group {data.group}
@@ -823,6 +856,11 @@ function MatchRow({
               {data.round && (
                 <span className="rounded-md border border-accent-2/40 bg-accent-2/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-accent-2">
                   {data.round}
+                </span>
+              )}
+              {data.manuallyResolved && (
+                <span className="rounded-md border border-gold/40 bg-gold/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-gold">
+                  Manually set
                 </span>
               )}
             </span>

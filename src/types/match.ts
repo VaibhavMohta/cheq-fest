@@ -1,5 +1,5 @@
 import type { Timestamp } from 'firebase/firestore';
-import type { TrackableEvent } from './sport';
+import type { AdvancedSlot, TrackableEvent } from './sport';
 import type { TeamId } from './team';
 
 export const MATCH_STATUSES = ['scheduled', 'live', 'final'] as const;
@@ -57,6 +57,23 @@ export type MatchDoc = {
    *  on the sport. */
   group: string | null;
   round: string | null;
+  // ── Bracket linkage (all optional) ──────────────────────────────
+  /** Stable bracket-stage id this match belongs to (e.g. 'group',
+   *  'qf', 'sf', 'f'). Mirrors the bracket model on the sport doc. */
+  stageId?: string | null;
+  /** Stable bracket-group id within the stage (e.g. 'A', 'QF1', 'F').
+   *  Mirrors `group` for legacy code that filters on the flat tag. */
+  groupId?: string | null;
+  /** Placeholder slot for the home team when the bracket hasn't
+   *  resolved a real teamId yet. `teamAId` is the empty string until
+   *  the slot resolves. Once resolved, this is cleared. */
+  teamASlot?: AdvancedSlot | null;
+  teamBSlot?: AdvancedSlot | null;
+  /** True when an admin manually picked a teamA/B that differs from
+   *  the bracket-resolved slot. Auto-advance leaves this match
+   *  untouched so the override sticks even if the upstream winner
+   *  changes. */
+  manuallyResolved?: boolean | null;
 };
 
 export type RefereeEventDoc = {
