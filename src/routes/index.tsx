@@ -524,63 +524,77 @@ function MatchCard({
     match.state.scoreA === match.state.scoreB;
 
   return (
-    <div className="rounded-2xl border border-line bg-bg-card px-4 py-3">
-      <div className="flex items-center justify-between">
-        <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
-          <SportIcon sportName={sportName} size={22} />
-          {sportName}
-          {match.matchNumber != null && (
-            <span className="ml-1 text-ink-mute">#{match.matchNumber}</span>
-          )}
-        </p>
-        <p
-          className="font-mono text-[10px] uppercase tracking-[0.12em]"
-          style={{ color: statusColor }}
-        >
-          {statusLabel}
-        </p>
+    <div className="flex overflow-hidden rounded-2xl border border-line bg-bg-card">
+      {/* Leading sport-icon banner — full card height, ~18% of card
+          width on a 380px viewport. Tinted background so the
+          color-graded glyph reads against the dark card. */}
+      <div
+        className="flex w-[68px] shrink-0 items-center justify-center border-r border-line p-2"
+        style={{
+          background:
+            'linear-gradient(135deg, color-mix(in oklab, var(--bg-elev) 80%, transparent), var(--bg-card))',
+        }}
+        aria-hidden
+      >
+        <SportIcon sportName={sportName} size={44} />
       </div>
-      <div className="mt-2 flex items-center gap-3">
-        <TeamLine
-          team={a}
-          score={showScore ? match.state.scoreA : null}
-          isWinner={winnerA}
-        />
-        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
-          vs
-        </span>
-        <TeamLine
-          team={b}
-          score={showScore ? match.state.scoreB : null}
-          align="right"
-          isWinner={winnerB}
-        />
+      <div className="flex min-w-0 flex-1 flex-col px-3 py-3">
+        <div className="flex items-center justify-between">
+          <p className="truncate font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
+            {sportName}
+            {match.matchNumber != null && (
+              <span className="ml-1 text-ink-mute">#{match.matchNumber}</span>
+            )}
+          </p>
+          <p
+            className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em]"
+            style={{ color: statusColor }}
+          >
+            {statusLabel}
+          </p>
+        </div>
+        <div className="mt-2 flex items-center gap-3">
+          <TeamLine
+            team={a}
+            score={showScore ? match.state.scoreA : null}
+            isWinner={winnerA}
+          />
+          <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
+            vs
+          </span>
+          <TeamLine
+            team={b}
+            score={showScore ? match.state.scoreB : null}
+            align="right"
+            isWinner={winnerB}
+          />
+        </div>
+        {/* Result line under finals: winner's team name or "Draw". */}
+        {final && (
+          <p className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
+            {isDraw
+              ? 'Draw'
+              : winnerA
+                ? `${a?.name ?? match.teamAId} wins`
+                : winnerB
+                  ? `${b?.name ?? match.teamBId} wins`
+                  : 'Ended'}
+            {match.venue && ` · ${match.venue}`}
+          </p>
+        )}
+        {!final && match.venue && (
+          <p className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
+            {match.venue}
+          </p>
+        )}
+        {/* Referee line — always shown when any ref is assigned. Kept
+            on its own line so the venue line above stays compact. */}
+        {refereeLabel && (
+          <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
+            {refereeLabel}
+          </p>
+        )}
       </div>
-      {/* Result line under finals: winner's team name or "Draw". */}
-      {final && (
-        <p className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
-          {isDraw
-            ? 'Draw'
-            : winnerA
-              ? `${a?.name ?? match.teamAId} wins`
-              : winnerB
-                ? `${b?.name ?? match.teamBId} wins`
-                : 'Ended'}
-          {match.venue && ` · ${match.venue}`}
-        </p>
-      )}
-      {!final && match.venue && (
-        <p className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
-          {match.venue}
-        </p>
-      )}
-      {/* Referee line — always shown when any ref is assigned. Kept
-          on its own line so the venue line above stays compact. */}
-      {refereeLabel && (
-        <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
-          {refereeLabel}
-        </p>
-      )}
     </div>
   );
 }

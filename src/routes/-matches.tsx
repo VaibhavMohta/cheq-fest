@@ -306,43 +306,57 @@ function MatchRow({
         : { text: startLabel, color: 'var(--ink-dim)' };
 
   return (
-    <article className="rounded-2xl border border-line bg-bg-card px-4 py-3">
-      <header className="flex items-baseline justify-between gap-2">
-        <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
-          <SportIcon sportName={sportName} arenaType={sport?.arenaType} size={22} />
-          {sportName}
-          {match.matchNumber != null && (
-            <span className="ml-1 text-ink-mute">#{match.matchNumber}</span>
-          )}
-        </p>
-        <p
-          className="font-mono text-[10px] uppercase tracking-[0.12em]"
-          style={{ color: tag.color }}
-        >
-          {tag.text}
-        </p>
-      </header>
-
-      <div className="mt-2 flex items-center gap-3">
-        <TeamLine
-          name={aLabel}
-          color={teamA?.color}
-          score={showScore ? match.state.scoreA : null}
-          isWinner={winnerA}
-        />
-        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
-          vs
-        </span>
-        <TeamLine
-          name={bLabel}
-          color={teamB?.color}
-          score={showScore ? match.state.scoreB : null}
-          isWinner={winnerB}
-          align="right"
-        />
+    <article className="flex overflow-hidden rounded-2xl border border-line bg-bg-card">
+      {/* Sport icon banner — fills the full card height, ~18% of the
+          card width on a 380px viewport. Tinted background so the
+          color-graded glyph reads against the dark card. */}
+      <div
+        className="flex w-[68px] shrink-0 items-center justify-center border-r border-line p-2"
+        style={{
+          background:
+            'linear-gradient(135deg, color-mix(in oklab, var(--bg-elev) 80%, transparent), var(--bg-card))',
+        }}
+        aria-hidden
+      >
+        <SportIcon sportName={sportName} arenaType={sport?.arenaType} size={44} />
       </div>
 
-      {(match.venue || variant !== 'live') && (
+      <div className="flex min-w-0 flex-1 flex-col px-3 py-3">
+        <header className="flex items-baseline justify-between gap-2">
+          <p className="truncate font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
+            {sportName}
+            {match.matchNumber != null && (
+              <span className="ml-1 text-ink-mute">#{match.matchNumber}</span>
+            )}
+          </p>
+          <p
+            className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em]"
+            style={{ color: tag.color }}
+          >
+            {tag.text}
+          </p>
+        </header>
+
+        <div className="mt-2 flex items-center gap-3">
+          <TeamLine
+            name={aLabel}
+            color={teamA?.color}
+            score={showScore ? match.state.scoreA : null}
+            isWinner={winnerA}
+          />
+          <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
+            vs
+          </span>
+          <TeamLine
+            name={bLabel}
+            color={teamB?.color}
+            score={showScore ? match.state.scoreB : null}
+            isWinner={winnerB}
+            align="right"
+          />
+        </div>
+
+        {(match.venue || variant !== 'live') && (
         <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-mute">
           {variant === 'live' && match.scheduledStart && (
             <span>Started {startLabel}</span>
@@ -367,6 +381,7 @@ function MatchRow({
           )}
         </p>
       )}
+      </div>
     </article>
   );
 }
