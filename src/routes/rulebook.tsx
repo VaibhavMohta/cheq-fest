@@ -100,8 +100,7 @@ function RulebookScreen() {
                 <SportIcon
                   sportName={s.name}
                   arenaType={s.arenaType}
-                  size={16}
-                  style={{ color: 'var(--accent-3)' }}
+                  size={24}
                 />
                 <span className="flex-1 truncate font-display text-sm uppercase">
                   {s.name}
@@ -163,7 +162,7 @@ function SportQuickRules({ sport }: { sport: SportWithId }) {
     <article className="rounded-2xl border border-line bg-bg-card px-4 py-3">
       <header className="mb-2 flex items-baseline justify-between gap-2">
         <h3 className="flex items-center gap-1.5 font-display text-base uppercase">
-          <SportIcon sportName={sport.name} arenaType={sport.arenaType} size={16} />
+          <SportIcon sportName={sport.name} arenaType={sport.arenaType} size={22} />
           {sport.name}
         </h3>
         <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-ink-dim">

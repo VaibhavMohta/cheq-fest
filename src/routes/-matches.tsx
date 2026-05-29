@@ -309,7 +309,7 @@ function MatchRow({
     <article className="rounded-2xl border border-line bg-bg-card px-4 py-3">
       <header className="flex items-baseline justify-between gap-2">
         <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
-          <SportIcon sportName={sportName} arenaType={sport?.arenaType} size={14} />
+          <SportIcon sportName={sportName} arenaType={sport?.arenaType} size={22} />
           {sportName}
           {match.matchNumber != null && (
             <span className="ml-1 text-ink-mute">#{match.matchNumber}</span>

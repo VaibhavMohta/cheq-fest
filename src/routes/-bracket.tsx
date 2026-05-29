@@ -148,7 +148,7 @@ export default function BracketScreen() {
                         }
                   }
                 >
-                  <SportIcon sportName={s.name} arenaType={s.arenaType} size={12} />
+                  <SportIcon sportName={s.name} arenaType={s.arenaType} size={18} />
                   {s.name}
                 </button>
               ))}

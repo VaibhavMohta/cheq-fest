@@ -527,7 +527,7 @@ function MatchCard({
     <div className="rounded-2xl border border-line bg-bg-card px-4 py-3">
       <div className="flex items-center justify-between">
         <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
-          <SportIcon sportName={sportName} size={14} />
+          <SportIcon sportName={sportName} size={22} />
           {sportName}
           {match.matchNumber != null && (
             <span className="ml-1 text-ink-mute">#{match.matchNumber}</span>

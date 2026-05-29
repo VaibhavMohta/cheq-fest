@@ -295,7 +295,7 @@ function SportRosterRow({
     <article className="rounded-xl border border-line bg-bg-card px-3 py-2.5">
       <header className="flex items-baseline justify-between gap-2">
         <h3 className="flex items-center gap-1.5 truncate font-display text-sm uppercase">
-          <SportIcon sportName={sport.name} arenaType={sport.arenaType} size={14} />
+          <SportIcon sportName={sport.name} arenaType={sport.arenaType} size={20} />
           {sport.name}
         </h3>
         <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
