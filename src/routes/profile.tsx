@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Link, createFileRoute } from '@tanstack/react-router';
+import { getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { TopBar } from '@/components/shared/TopBar';
 import { SectionTitle } from '@/components/shared/SectionTitle';
 import { Avatar } from '@/components/shared/Avatar';
@@ -6,6 +8,12 @@ import { Button } from '@/components/shared/Button';
 import { QuickActionTile } from '@/components/shared/QuickActionTile';
 import { signOut, useAuth } from '@/lib/auth';
 import { useRole } from '@/lib/roles';
+import { useActiveEvent } from '@/lib/activeEvent';
+import { matchesCol, rostersCol, sportsCol, teamsCol } from '@/lib/db';
+import { pointsForMatch } from '@/lib/tournament';
+import type { MatchDoc } from '@/types/match';
+import type { SportDoc } from '@/types/sport';
+import type { RosterDoc } from '@/lib/db';
 
 export const Route = createFileRoute('/profile')({
   component: ProfileScreen,
@@ -48,6 +56,8 @@ function ProfileScreen() {
 
   const { user } = authState;
   const isRef = role.perMatchReferee.length > 0;
+  const userEmail = user.email?.toLowerCase() ?? null;
+  const stats = usePlayerStats(userEmail);
 
   return (
     <>
@@ -76,12 +86,16 @@ function ProfileScreen() {
 
         <SectionTitle>Stats</SectionTitle>
         <div className="mx-5 grid grid-cols-3 gap-2">
-          <StatCard label="Matches" value="0" />
-          <StatCard label="Wins" value="0" />
-          <StatCard label="Points" value="0" />
+          <StatCard label="Matches" value={String(stats.matches)} />
+          <StatCard label="Wins" value={String(stats.wins)} />
+          <StatCard label="Points" value={String(stats.points)} />
         </div>
         <p className="mx-5 mt-2 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-mute">
-          Stats appear after your first finalized match.
+          {stats.loading
+            ? 'Crunching match history…'
+            : stats.matches === 0
+              ? 'Stats appear after your first finalized match.'
+              : 'Counts finalised matches where you were on the pitch roster.'}
         </p>
 
         <SectionTitle>Quick Actions</SectionTitle>
@@ -118,21 +132,12 @@ function ProfileScreen() {
             />
           )}
           {(role.is('admin') || role.is('super-admin')) && (
-            <>
-              <QuickActionTile
-                to="/admin"
-                label="Event Setup"
-                sub="Players · Teams · Sports · Rulebook"
-                accent="primary"
-              />
-              <QuickActionTile
-                to="/score-entry"
-                label="Post Score"
-                sub="Step 10"
-                accent="primary"
-                disabled
-              />
-            </>
+            <QuickActionTile
+              to="/admin"
+              label="Event Setup"
+              sub="Players · Teams · Sports · Rulebook"
+              accent="primary"
+            />
           )}
           {role.is('super-admin') && (
             <QuickActionTile
@@ -152,6 +157,138 @@ function ProfileScreen() {
       </main>
     </>
   );
+}
+
+type PlayerStats = { matches: number; wins: number; points: number; loading: boolean };
+
+/**
+ * Counts matches the user played in (was on the pitch roster of their
+ * team for that sport), wins, and points contributed for the active
+ * event. Points use the same lookup chain as the leaderboard — match
+ * override → per-round override → sport default — via `pointsForMatch`.
+ *
+ * The user's team is identified by membership (`teams.members` array-
+ * contains their email). Rosters drive participation per-sport; only
+ * finalised matches count, so live and scheduled matches don't inflate
+ * the numbers.
+ */
+function usePlayerStats(userEmail: string | null): PlayerStats {
+  const { activeEventId } = useActiveEvent();
+  const [stats, setStats] = useState<PlayerStats>({
+    matches: 0,
+    wins: 0,
+    points: 0,
+    loading: true,
+  });
+
+  useEffect(() => {
+    if (!activeEventId || !userEmail) {
+      setStats({ matches: 0, wins: 0, points: 0, loading: false });
+      return;
+    }
+    let cancelled = false;
+
+    // Resolve the user's team(s) in this event — almost always one,
+    // but we tolerate ghosts gracefully.
+    const teamsQ = query(
+      teamsCol(activeEventId),
+      where('members', 'array-contains', userEmail),
+    );
+
+    const compute = async () => {
+      const teamsSnap = await getDocs(teamsQ);
+      if (cancelled) return;
+      const teamIds = teamsSnap.docs.map((d) => d.id);
+      if (teamIds.length === 0) {
+        setStats({ matches: 0, wins: 0, points: 0, loading: false });
+        return;
+      }
+      // Pull every finalised match in the event in one read; in-memory
+      // filter beats round-tripping per match.
+      const [matchesSnap, sportsSnap] = await Promise.all([
+        getDocs(query(matchesCol(activeEventId), where('status', '==', 'final'))),
+        getDocs(sportsCol(activeEventId)),
+      ]);
+      if (cancelled) return;
+      const sportsById = new Map<string, SportDoc>();
+      for (const d of sportsSnap.docs) sportsById.set(d.id, d.data());
+
+      // Cache rosters lazily so each (team, sport) pair is read at most
+      // once even if it appears in multiple matches.
+      const rosterCache = new Map<string, RosterDoc | null>();
+      const getRoster = async (teamId: string, sportId: string) => {
+        const key = `${teamId}/${sportId}`;
+        if (rosterCache.has(key)) return rosterCache.get(key)!;
+        // rostersCol is a small collection (≤ #sports); fetching the
+        // whole team's rosters once and indexing is cheaper than N
+        // doc-gets when a player is on the pitch across many sports.
+        const snap = await getDocs(rostersCol(activeEventId, teamId));
+        for (const d of snap.docs) {
+          rosterCache.set(`${teamId}/${d.id}`, d.data());
+        }
+        // Anything not in the snapshot is genuinely missing.
+        if (!rosterCache.has(key)) rosterCache.set(key, null);
+        return rosterCache.get(key)!;
+      };
+
+      let matches = 0;
+      let wins = 0;
+      let points = 0;
+
+      for (const d of matchesSnap.docs) {
+        const m: MatchDoc = d.data();
+        // Only matches involving one of the user's teams.
+        const userTeamId = teamIds.find(
+          (id) => id === m.teamAId || id === m.teamBId,
+        );
+        if (!userTeamId) continue;
+
+        const roster = await getRoster(userTeamId, m.sportId);
+        if (cancelled) return;
+        const onPitch = roster?.pitch?.some(
+          (e) => e.toLowerCase() === userEmail,
+        );
+        if (!onPitch) continue;
+
+        matches += 1;
+        const sport = sportsById.get(m.sportId);
+        const p = pointsForMatch(sport, m.round, m.points ?? null);
+        if (m.winnerTeamId === null) {
+          // Draw.
+          points += p.draw;
+        } else if (m.winnerTeamId === userTeamId) {
+          wins += 1;
+          points += p.win;
+        } else {
+          points += p.loss;
+        }
+      }
+
+      if (!cancelled) setStats({ matches, wins, points, loading: false });
+    };
+
+    // Recompute on any change to the user's team membership or to the
+    // match list. Roster changes don't trigger a recompute on purpose
+    // — once a match is final, the roster snapshot at that time is
+    // what counts; admins can still edit rosters for the next match.
+    const unsubTeams = onSnapshot(teamsQ, () => {
+      void compute();
+    });
+    const unsubMatches = onSnapshot(
+      query(matchesCol(activeEventId), where('status', '==', 'final')),
+      () => {
+        void compute();
+      },
+    );
+
+    return () => {
+      cancelled = true;
+      unsubTeams();
+      unsubMatches();
+    };
+  }, [activeEventId, userEmail]);
+
+  return stats;
 }
 
 function StatCard({ label, value }: { label: string; value: string }) {

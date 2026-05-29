@@ -16,9 +16,7 @@ export const Route = createFileRoute('/')({
   component: HomeScreen,
 });
 
-const standings: never[] = [];
-
-type TeamLite = { id: string; name: string; color: string };
+type TeamLite = { id: string; name: string; color: string; totalPoints: number };
 type MatchWithId = MatchDoc & { id: string };
 
 function HomeScreen() {
@@ -101,12 +99,7 @@ function HomeScreen() {
         <SectionTitle trailing={<Link to="/leaderboard">FULL BOARD →</Link>}>
           Standings
         </SectionTitle>
-        {standings.length === 0 ? (
-          <EmptyState
-            title="No scores yet"
-            hint="Standings update automatically as matches finish."
-          />
-        ) : null}
+        <Standings teams={teams} />
 
         <SectionTitle trailing={<Link to="/rulebook">OPEN →</Link>}>The Rulebook</SectionTitle>
         <Link
@@ -324,6 +317,7 @@ function useHomeData(activeEventId: string | null): {
             id: d.id,
             name: data.name ?? d.id,
             color: data.color ?? '',
+            totalPoints: data.totalPoints ?? 0,
           });
         }
         setTeams(next);
@@ -338,6 +332,60 @@ function useHomeData(activeEventId: string | null): {
   }, [activeEventId]);
 
   return { matches, sports, teams };
+}
+
+function Standings({ teams }: { teams: Map<string, TeamLite> }) {
+  // Show the top 3 by totalPoints. Anything beyond lives at /leaderboard.
+  // Zero-point teams still render so users see "everyone's on 0" instead
+  // of an empty state on day 1.
+  const ranked = useMemo(
+    () =>
+      [...teams.values()].sort((a, b) => b.totalPoints - a.totalPoints).slice(0, 3),
+    [teams],
+  );
+  if (ranked.length === 0) {
+    return (
+      <EmptyState
+        title="No teams yet"
+        hint="Standings update automatically as matches finish."
+      />
+    );
+  }
+  return (
+    <ol className="mx-5 flex flex-col gap-2">
+      {ranked.map((t, i) => {
+        const rank = i + 1;
+        const isTop = rank === 1;
+        return (
+          <li
+            key={t.id}
+            className="flex items-center gap-3 rounded-xl border border-line bg-bg-card px-4 py-2.5"
+          >
+            <span
+              className="font-display text-xl leading-none"
+              style={{ color: isTop ? 'var(--gold)' : 'var(--ink-dim)' }}
+            >
+              {rank}
+            </span>
+            <span
+              aria-hidden
+              className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ background: colorVarFor(t.color) }}
+            />
+            <span className="flex-1 truncate font-display text-sm uppercase">
+              {t.name}
+            </span>
+            <span className="font-display text-lg leading-none text-accent-2">
+              {t.totalPoints}
+            </span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
+              pts
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
 }
 
 function MatchCard({
