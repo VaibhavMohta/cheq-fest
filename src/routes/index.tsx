@@ -24,20 +24,26 @@ function HomeScreen() {
   const { matches, sports, teams } = useHomeData(activeEventId);
 
   // Live = status 'live'. Today = scheduled to start within today's
-  // calendar window (00:00 → 23:59 local) AND not yet final. The two
-  // sets are disjoint: a live match doesn't double up in Today.
-  const { live, today } = useMemo(() => {
+  // calendar window (00:00 → 23:59 local) AND not yet final. Recent =
+  // finished matches, sorted by endedAt desc (fallback to
+  // pointsAwardedAt or scheduledStart), capped at 5 so the home screen
+  // stays scannable. The three sets are disjoint by status.
+  const { live, today, recent } = useMemo(() => {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const endOfDay = startOfDay + 24 * 60 * 60 * 1000;
     const live: MatchWithId[] = [];
     const today: MatchWithId[] = [];
+    const finals: MatchWithId[] = [];
     for (const m of matches) {
       if (m.status === 'live') {
         live.push(m);
         continue;
       }
-      if (m.status === 'final') continue;
+      if (m.status === 'final') {
+        finals.push(m);
+        continue;
+      }
       const start = m.scheduledStart?.toMillis();
       if (start != null && start >= startOfDay && start < endOfDay) {
         today.push(m);
@@ -47,7 +53,14 @@ function HomeScreen() {
       (a, b) =>
         (a.scheduledStart?.toMillis() ?? 0) - (b.scheduledStart?.toMillis() ?? 0),
     );
-    return { live, today };
+    // Sort finals newest first using whichever timestamp is available.
+    const endTime = (m: MatchWithId): number =>
+      m.endedAt?.toMillis?.() ??
+      m.pointsAwardedAt?.toMillis?.() ??
+      m.scheduledStart?.toMillis?.() ??
+      0;
+    finals.sort((a, b) => endTime(b) - endTime(a));
+    return { live, today, recent: finals.slice(0, 5) };
   }, [matches]);
 
   return (
@@ -91,6 +104,28 @@ function HomeScreen() {
             {today.map((m) => (
               <li key={m.id}>
                 <MatchCard match={m} sports={sports} teams={teams} />
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <SectionTitle
+          trailing={
+            recent.length > 0 ? <Link to="/leaderboard">FULL BOARD →</Link> : undefined
+          }
+        >
+          Recent Results
+        </SectionTitle>
+        {recent.length === 0 ? (
+          <EmptyState
+            title="No results yet"
+            hint="Finished matches show their final scores here as soon as a referee or admin ends them."
+          />
+        ) : (
+          <ul className="mx-5 flex flex-col gap-2">
+            {recent.map((m) => (
+              <li key={m.id}>
+                <MatchCard match={m} sports={sports} teams={teams} final />
               </li>
             ))}
           </ul>
@@ -393,21 +428,42 @@ function MatchCard({
   sports,
   teams,
   live = false,
+  final = false,
 }: {
   match: MatchWithId;
   sports: Map<string, string>;
   teams: Map<string, TeamLite>;
   live?: boolean;
+  final?: boolean;
 }) {
   const sportName = sports.get(match.sportId) ?? match.sportId;
   const a = teams.get(match.teamAId);
   const b = teams.get(match.teamBId);
+  const showScore = live || final;
+  // Status pill copy / color. Live in lava-orange, Final in lime, else
+  // the scheduled start time in muted ink.
   const startLabel = match.scheduledStart
     ? match.scheduledStart.toDate().toLocaleTimeString(undefined, {
         hour: 'numeric',
         minute: '2-digit',
       })
     : 'TBD';
+  const statusLabel = live ? '● Live' : final ? 'Final' : startLabel;
+  const statusColor = live
+    ? 'var(--accent)'
+    : final
+      ? 'var(--accent-2)'
+      : 'var(--ink-dim)';
+
+  // Winner highlighting for final matches. null winnerTeamId = draw —
+  // no highlight on either side.
+  const winnerA = final && match.winnerTeamId === match.teamAId;
+  const winnerB = final && match.winnerTeamId === match.teamBId;
+  const isDraw =
+    final &&
+    match.winnerTeamId == null &&
+    match.state.scoreA === match.state.scoreB;
+
   return (
     <div className="rounded-2xl border border-line bg-bg-card px-4 py-3">
       <div className="flex items-center justify-between">
@@ -419,17 +475,41 @@ function MatchCard({
         </p>
         <p
           className="font-mono text-[10px] uppercase tracking-[0.12em]"
-          style={{ color: live ? 'var(--accent)' : 'var(--ink-dim)' }}
+          style={{ color: statusColor }}
         >
-          {live ? '● Live' : startLabel}
+          {statusLabel}
         </p>
       </div>
       <div className="mt-2 flex items-center gap-3">
-        <TeamLine team={a} score={live ? match.state.scoreA : null} />
-        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">vs</span>
-        <TeamLine team={b} score={live ? match.state.scoreB : null} align="right" />
+        <TeamLine
+          team={a}
+          score={showScore ? match.state.scoreA : null}
+          isWinner={winnerA}
+        />
+        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
+          vs
+        </span>
+        <TeamLine
+          team={b}
+          score={showScore ? match.state.scoreB : null}
+          align="right"
+          isWinner={winnerB}
+        />
       </div>
-      {match.venue && (
+      {/* Result line under finals: winner's team name or "Draw". */}
+      {final && (
+        <p className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
+          {isDraw
+            ? 'Draw'
+            : winnerA
+              ? `${a?.name ?? match.teamAId} wins`
+              : winnerB
+                ? `${b?.name ?? match.teamBId} wins`
+                : 'Final'}
+          {match.venue && ` · ${match.venue}`}
+        </p>
+      )}
+      {!final && match.venue && (
         <p className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
           {match.venue}
         </p>
@@ -442,10 +522,12 @@ function TeamLine({
   team,
   score,
   align = 'left',
+  isWinner = false,
 }: {
   team: TeamLite | undefined;
   score: number | null;
   align?: 'left' | 'right';
+  isWinner?: boolean;
 }) {
   return (
     <div className={`flex flex-1 items-center gap-2 ${align === 'right' ? 'justify-end' : ''}`}>
@@ -454,11 +536,22 @@ function TeamLine({
         className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
         style={{ background: colorVarFor(team?.color) }}
       />
-      <span className="truncate font-display text-sm uppercase">
+      <span
+        className="truncate font-display text-sm uppercase"
+        style={isWinner ? { color: 'var(--accent-2)', fontWeight: 700 } : undefined}
+      >
         {team?.name ?? '—'}
       </span>
       {score != null && (
-        <span className="font-display text-base text-accent-2">{score}</span>
+        <span
+          className="font-display text-base"
+          style={{
+            color: isWinner ? 'var(--accent-2)' : 'var(--ink)',
+            fontWeight: isWinner ? 700 : 400,
+          }}
+        >
+          {score}
+        </span>
       )}
     </div>
   );
