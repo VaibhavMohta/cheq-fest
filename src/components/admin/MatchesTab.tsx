@@ -25,12 +25,13 @@ import {
 import { db } from '@/lib/firebase';
 import { pointsForMatch } from '@/lib/tournament';
 import { emptyMatchState, type MatchDoc, type MatchStatus } from '@/types/match';
-import type { TeamId } from '@/types/team';
+import { colorVarFor, teamTextOnPage, type TeamId } from '@/types/team';
+import { SportIcon } from '@/components/shared/SportIcon';
 import type { SportDoc, TournamentConfig } from '@/types/sport';
 import { useAllEventPlayers, type PersonRow } from '@/lib/playerDirectory';
 import { PlayerPicker } from '@/components/shared/PlayerPicker';
 
-type TeamOption = { id: TeamId; name: string };
+type TeamOption = { id: TeamId; name: string; color?: string };
 
 /** Resolve a team id to a display name from the loaded team list. Falls
  *  back to the raw id (never an empty string) when the team is missing —
@@ -316,7 +317,7 @@ function MatchesTabInner({
     () =>
       (teams.data ?? [])
         .filter((t) => typeof t.name === 'string' && t.name.trim().length > 0)
-        .map((t) => ({ id: t.id, name: t.name })),
+        .map((t) => ({ id: t.id, name: t.name, color: t.color })),
     [teams.data],
   );
   const availableSports = useMemo(
@@ -482,7 +483,7 @@ function CreateMatchForm({
   pending,
   onCreate,
 }: {
-  sports: { id: string; name: string; tournament?: TournamentConfig | null }[];
+  sports: { id: string; name: string; arenaType?: SportDoc['arenaType']; tournament?: TournamentConfig | null }[];
   teams: TeamOption[];
   eventStart: Date;
   eventEnd: Date;
@@ -765,7 +766,7 @@ function MatchList({
   onRemove,
 }: {
   matches: (MatchDoc & { id: string })[];
-  sports: { id: string; name: string; tournament?: TournamentConfig | null }[];
+  sports: { id: string; name: string; arenaType?: SportDoc['arenaType']; tournament?: TournamentConfig | null }[];
   teams: TeamOption[];
   people: PersonRow[];
   peopleByUid: Map<string, PersonRow>;
@@ -872,6 +873,7 @@ function MatchList({
             key={m.id}
             id={m.id}
             data={m}
+            sport={sports.find((s) => s.id === m.sportId) ?? null}
             teams={teams}
             people={people}
             peopleByUid={peopleByUid}
@@ -911,6 +913,7 @@ function FilterPill({
 function MatchRow({
   id,
   data,
+  sport,
   teams,
   people,
   peopleByUid,
@@ -919,6 +922,7 @@ function MatchRow({
 }: {
   id: string;
   data: MatchDoc;
+  sport: { id: string; name: string; arenaType?: SportDoc['arenaType'] } | null;
   teams: TeamOption[];
   people: PersonRow[];
   peopleByUid: Map<string, PersonRow>;
@@ -948,34 +952,109 @@ function MatchRow({
     onPatch({ refereeUids: uids });
   }
 
+  const sportName = sport?.name ?? data.sportId;
+  const teamA = teams.find((t) => t.id === data.teamAId);
+  const teamB = teams.find((t) => t.id === data.teamBId);
+  const aLabel = teamOrSlotLabel(data.teamAId, data.teamASlot, teams);
+  const bLabel = teamOrSlotLabel(data.teamBId, data.teamBSlot, teams);
+  const final = data.status === 'final';
+  const winnerA = final && data.winnerTeamId === data.teamAId;
+  const winnerB = final && data.winnerTeamId === data.teamBId;
+
+  // Mirror /matches' ended split-tint so finished matches show winner
+  // (green) vs loser (red) at a glance. Drawn / non-final rows stay
+  // on the neutral card surface.
+  const WIN = '#22c55e';
+  const LOSE = '#f87171';
+  const tintLeft = winnerA ? WIN : winnerB ? LOSE : null;
+  const tintRight = winnerA ? LOSE : winnerB ? WIN : null;
+  const endedStyle =
+    tintLeft && tintRight
+      ? {
+          background: `linear-gradient(to right,
+            color-mix(in oklab, ${tintLeft} 10%, transparent) 0%,
+            color-mix(in oklab, ${tintLeft} 10%, transparent) 50%,
+            color-mix(in oklab, ${tintRight} 10%, transparent) 50%,
+            color-mix(in oklab, ${tintRight} 10%, transparent) 100%)`,
+        }
+      : undefined;
+
   return (
-    <div className="rounded-2xl border border-line bg-bg-card">
+    <div className="overflow-hidden rounded-2xl border border-line bg-bg-card">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+        className="flex w-full text-left transition hover:bg-bg-elev/30"
       >
-        <span className="min-w-0 flex-1">
-          <span className="block font-display text-base uppercase">
-            {typeof data.matchNumber === 'number' && (
-              <span
-                className="mr-2 rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums align-middle"
-                style={{
-                  color: 'var(--accent-2)',
-                  borderColor:
-                    'color-mix(in oklab, var(--accent-2) 40%, transparent)',
-                }}
-              >
-                #{data.matchNumber}
-              </span>
-            )}
-            {teamOrSlotLabel(data.teamAId, data.teamASlot, teams)} <span className="text-ink-dim">vs</span> {teamOrSlotLabel(data.teamBId, data.teamBSlot, teams)}
+        {/* Sport icon banner — full row height, ~16% width on a 380px
+            viewport. Same shape as the public /matches list. */}
+        <div
+          className="flex w-[62px] shrink-0 items-center justify-center border-r border-line p-2"
+          style={{
+            background:
+              'linear-gradient(135deg, color-mix(in oklab, var(--bg-elev) 80%, transparent), var(--bg-card))',
+          }}
+          aria-hidden
+        >
+          <SportIcon sportName={sportName} arenaType={sport?.arenaType ?? null} size={40} />
+        </div>
+
+        <div
+          className="flex min-w-0 flex-1 flex-col gap-1 px-3 py-2.5"
+          style={endedStyle}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex min-w-0 items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
+              {typeof data.matchNumber === 'number' && (
+                <span
+                  className="rounded-md border px-1.5 py-0.5 font-bold tabular-nums"
+                  style={{
+                    color: 'var(--accent-2)',
+                    borderColor:
+                      'color-mix(in oklab, var(--accent-2) 40%, transparent)',
+                  }}
+                >
+                  #{data.matchNumber}
+                </span>
+              )}
+              <span className="truncate">{sportName}</span>
+            </span>
+            <Chip variant={statusToChip(data.status)}>
+              {data.status === 'live' ? 'Live' : data.status === 'final' ? 'Ended' : 'Sched'}
+            </Chip>
+          </div>
+
+          {/* Teams row — mirrors the public /matches layout: color dot
+              + name, separated by 'vs'. Winner (when ended) gets bold
+              + bright off-white ink so the green/red tint stays
+              legible. */}
+          <div className="mt-0.5 flex items-center gap-2">
+            <AdminTeamLine
+              label={aLabel}
+              color={teamA?.color}
+              isWinner={winnerA}
+              isFinal={final}
+              score={final || data.status === 'live' ? data.state.scoreA : null}
+            />
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
+              vs
+            </span>
+            <AdminTeamLine
+              label={bLabel}
+              color={teamB?.color}
+              isWinner={winnerB}
+              isFinal={final}
+              score={final || data.status === 'live' ? data.state.scoreB : null}
+              align="right"
+            />
+          </div>
+
+          <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-mute">
+            {data.scheduledStart ? formatDateTime(data.scheduledStart) : 'unscheduled'} · {data.venue || 'no venue'}
           </span>
-          <span className="block font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
-            {data.sportId} · {data.scheduledStart ? formatDateTime(data.scheduledStart) : 'unscheduled'} · {data.venue || 'no venue'}
-          </span>
+
           {(data.group || data.round || data.stageId || data.manuallyResolved) && (
-            <span className="mt-1 flex flex-wrap gap-1">
+            <span className="flex flex-wrap gap-1">
               {data.stageId && (
                 <span className="rounded-md border border-accent/40 bg-accent/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-accent">
                   {data.stageId}
@@ -998,10 +1077,7 @@ function MatchRow({
               )}
             </span>
           )}
-        </span>
-        <Chip variant={statusToChip(data.status)}>
-          {data.status === 'live' ? 'Live' : data.status === 'final' ? 'Ended' : 'Sched'}
-        </Chip>
+        </div>
       </button>
 
       {open && (
@@ -1170,6 +1246,51 @@ function FinalizeButton({
     >
       Finalize → {auto ? teamNameFor(auto, teams) : 'Draw'}
     </Button>
+  );
+}
+
+/** Compact team line for the admin MatchRow collapsed view —
+ *  matches the public /matches layout (color dot + name + optional
+ *  score, winner bolded in bright ink). */
+function AdminTeamLine({
+  label,
+  color,
+  isWinner,
+  isFinal,
+  score,
+  align = 'left',
+}: {
+  label: string;
+  color: string | undefined;
+  isWinner: boolean;
+  isFinal: boolean;
+  score: number | null;
+  align?: 'left' | 'right';
+}) {
+  const nameColor = isFinal
+    ? 'var(--ink)' // bright off-white reads cleanly on the green/red split
+    : color
+      ? teamTextOnPage(color)
+      : 'var(--ink-dim)';
+  return (
+    <span
+      className={`flex flex-1 items-center gap-1.5 ${align === 'right' ? 'justify-end' : ''}`}
+    >
+      <span
+        aria-hidden
+        className="inline-block h-2 w-2 shrink-0 rounded-full"
+        style={{ background: colorVarFor(color) }}
+      />
+      <span
+        className="truncate font-display text-[13px] uppercase"
+        style={{ color: nameColor, fontWeight: isWinner ? 800 : 500 }}
+      >
+        {label}
+      </span>
+      {score != null && (
+        <span className="font-display text-[14px] text-accent-2">{score}</span>
+      )}
+    </span>
   );
 }
 
