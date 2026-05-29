@@ -448,7 +448,7 @@ function MatchCard({
         minute: '2-digit',
       })
     : 'TBD';
-  const statusLabel = live ? '● Live' : final ? 'Final' : startLabel;
+  const statusLabel = live ? '● Live' : final ? 'Ended' : startLabel;
   const statusColor = live
     ? 'var(--accent)'
     : final
@@ -505,7 +505,7 @@ function MatchCard({
               ? `${a?.name ?? match.teamAId} wins`
               : winnerB
                 ? `${b?.name ?? match.teamBId} wins`
-                : 'Final'}
+                : 'Ended'}
           {match.venue && ` · ${match.venue}`}
         </p>
       )}
