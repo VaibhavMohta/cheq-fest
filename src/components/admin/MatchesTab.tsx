@@ -880,6 +880,52 @@ function MatchRow({
             )}
           </p>
 
+          {/* Bracket teams override. Visible for any match — useful for
+              downstream bracket matches that still hold a placeholder
+              slot OR for fixing a mis-resolved auto-advance. Picking a
+              team here sets manuallyResolved=true so the cloud
+              resolver leaves it alone on future winner changes. */}
+          {(data.teamASlot || data.teamBSlot || data.stageId) && (
+            <div className="flex flex-col gap-1.5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
+                Teams (admin override)
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <TeamOverrideSelect
+                  label={data.teamAId ? teamNameFor(data.teamAId, teams) : slotLabel(data.teamASlot)}
+                  selected={data.teamAId || ''}
+                  excludeId={data.teamBId || undefined}
+                  teams={teams}
+                  onPick={(teamId) =>
+                    onPatch({
+                      teamAId: teamId as TeamId,
+                      teamASlot: null,
+                      manuallyResolved: true,
+                    })
+                  }
+                />
+                <TeamOverrideSelect
+                  label={data.teamBId ? teamNameFor(data.teamBId, teams) : slotLabel(data.teamBSlot)}
+                  selected={data.teamBId || ''}
+                  excludeId={data.teamAId || undefined}
+                  teams={teams}
+                  onPick={(teamId) =>
+                    onPatch({
+                      teamBId: teamId as TeamId,
+                      teamBSlot: null,
+                      manuallyResolved: true,
+                    })
+                  }
+                />
+              </div>
+              {data.manuallyResolved && (
+                <p className="font-mono text-[9px] uppercase tracking-[0.06em] text-gold">
+                  Manually resolved — auto-advance will not touch this match.
+                </p>
+              )}
+            </div>
+          )}
+
           <FormField
             label="Referees"
             hint="Tap to add or remove. Long-press a tile to drag. Search by name or email."
@@ -991,6 +1037,45 @@ function FinalizeButton({
     >
       Finalize → {auto ? teamNameFor(auto, teams) : 'Draw'}
     </Button>
+  );
+}
+
+function TeamOverrideSelect({
+  label,
+  selected,
+  excludeId,
+  teams,
+  onPick,
+}: {
+  label: string;
+  selected: string;
+  excludeId?: string;
+  teams: TeamOption[];
+  onPick: (teamId: string) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-0.5">
+      <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+        {label}
+      </span>
+      <select
+        value={selected}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v) onPick(v);
+        }}
+        className="rounded-md border border-line bg-bg-card px-2 py-1 text-sm"
+      >
+        <option value="">— pick a team —</option>
+        {teams
+          .filter((t) => t.id !== excludeId)
+          .map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+      </select>
+    </label>
   );
 }
 

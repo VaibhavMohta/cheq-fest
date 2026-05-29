@@ -16,7 +16,10 @@ import {
   ARENA_TYPES,
   SPORT_CATEGORIES,
   defaultSport,
+  type AdvancedSlot,
   type ArenaType,
+  type BracketGroup,
+  type BracketStage,
   type GenderRequirement,
   type SportCategory,
   type SportDoc,
@@ -839,6 +842,15 @@ function TournamentEditor({
         </Button>
       </div>
 
+      {tc.groups.length > 0 && (
+        <BracketEditor
+          eventId={eventId}
+          sportId={sportId}
+          tc={tc}
+          onChange={(next) => onChange(next)}
+        />
+      )}
+
       {value !== null && (
         <button
           type="button"
@@ -858,6 +870,520 @@ function TournamentEditor({
       )}
     </div>
   );
+}
+
+/**
+ * Match-tree editor. Stage 0 is auto-derived from `tc.groups` (the
+ * existing flat group setup) so admins keep using the legacy editor
+ * above for the first round. This section lets them layer additional
+ * stages on top — semifinals, finals, KO rounds — with each stage's
+ * groups sourcing their teams from prior stages by rank.
+ *
+ * The "Generate matches" button per stage creates *placeholder*
+ * matches with teamAId/B = '' and teamASlot/B pointing at the upstream
+ * source. The resolveBracket Cloud Function patches teamAId/B once the
+ * source group finishes.
+ */
+function BracketEditor({
+  eventId,
+  sportId,
+  tc,
+  onChange,
+}: {
+  eventId: string;
+  sportId: string;
+  tc: TournamentConfig;
+  onChange: (next: TournamentConfig) => void;
+}) {
+  const qc = useQueryClient();
+  const bracket = tc.bracket ?? [];
+  // Stage 0 is the legacy tc.groups, synthesised so the source picker
+  // in stage 1+ has a uniform shape to choose from. We don't persist
+  // this synthetic stage — it always re-derives from tc.groups.
+  const stage0: BracketStage = useMemo(
+    () => ({
+      id: 'group',
+      label: 'Group Stage',
+      order: 0,
+      groups: tc.groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        format: g.format ?? 'round-robin',
+        advances: 1, // default; admin overrides via the bracket editor
+        source: { kind: 'seeded' as const, teamIds: g.teamIds },
+      })),
+    }),
+    [tc.groups],
+  );
+
+  const allStages: BracketStage[] = [stage0, ...bracket];
+
+  const setBracket = (next: BracketStage[]) => onChange({ ...tc, bracket: next });
+
+  const addStage = () => {
+    const usedIds = new Set(allStages.map((s) => s.id));
+    const nextId = nextStageId(usedIds);
+    setBracket([
+      ...bracket,
+      {
+        id: nextId,
+        label: stageLabelFor(nextId),
+        order: allStages.length,
+        groups: [],
+      },
+    ]);
+  };
+
+  const updateStage = (idx: number, next: BracketStage) => {
+    const copy = [...bracket];
+    copy[idx] = next;
+    setBracket(copy);
+  };
+
+  // Match generator for a downstream stage. Creates placeholder
+  // matches with teamAId/B = '' and teamASlot/B pointing at the
+  // upstream group + rank. resolveBracket fills them in later.
+  const generate = useMutation({
+    mutationFn: async (stage: BracketStage) => {
+      let created = 0;
+      let skipped = 0;
+      // Pre-load existing matches for this sport+stage so we can dedupe.
+      const existing = await getDocs(
+        query(
+          matchesCol(eventId),
+          where('sportId', '==', sportId),
+          where('stageId', '==', stage.id),
+        ),
+      );
+      const existingKeys = new Set<string>();
+      for (const d of existing.docs) {
+        const m = d.data();
+        existingKeys.add(`${m.groupId ?? ''}|${slotKey(m.teamASlot)}|${slotKey(m.teamBSlot)}`);
+      }
+
+      for (const group of stage.groups) {
+        if (group.source.kind !== 'advanced') continue;
+        const slots = group.source.from;
+        // Knockout = pair adjacent slots (slot[0] vs slot[1], slot[2]
+        // vs slot[3], …). Round-robin = every pair.
+        const pairs: Array<[AdvancedSlot, AdvancedSlot]> = [];
+        if (group.format === 'knockout') {
+          for (let i = 0; i + 1 < slots.length; i += 2) {
+            pairs.push([slots[i]!, slots[i + 1]!]);
+          }
+        } else {
+          for (let i = 0; i < slots.length; i += 1) {
+            for (let j = i + 1; j < slots.length; j += 1) {
+              pairs.push([slots[i]!, slots[j]!]);
+            }
+          }
+        }
+        for (const [slotA, slotB] of pairs) {
+          const key = `${group.id}|${slotKey(slotA)}|${slotKey(slotB)}`;
+          if (existingKeys.has(key)) {
+            skipped += 1;
+            continue;
+          }
+          await addDoc(matchesCol(eventId), {
+            sportId,
+            teamAId: '',
+            teamBId: '',
+            scheduledStart: null,
+            venue: '',
+            refereeUids: [],
+            state: emptyMatchState(),
+            status: 'scheduled' satisfies MatchStatus,
+            winnerTeamId: null,
+            pointsAwardedAt: null,
+            createdAt: serverTimestamp() as unknown as Timestamp,
+            group: group.id,
+            round: stage.label,
+            stageId: stage.id,
+            groupId: group.id,
+            teamASlot: slotA,
+            teamBSlot: slotB,
+          });
+          created += 1;
+        }
+      }
+      return { created, skipped };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'matches', eventId] });
+    },
+  });
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-line bg-bg p-3">
+      <header className="flex items-center justify-between gap-2">
+        <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-accent-3">
+          Match tree
+        </p>
+        <Button
+          variant="ghost"
+          type="button"
+          className="!w-auto !px-2.5 !py-1 text-[10px]"
+          onClick={addStage}
+        >
+          + Add stage
+        </Button>
+      </header>
+      <p className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+        Stage 1 is your Groups above. Add Stage 2+ to advance winners
+        into semifinals / finals. Generate matches per stage when
+        you're done editing.
+      </p>
+
+      <ol className="flex flex-col gap-2">
+        <li className="rounded-xl border border-dashed border-line px-3 py-2">
+          <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-dim">
+            Stage 1 · {stage0.label}
+          </p>
+          <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+            {stage0.groups.length === 0
+              ? 'No groups yet — add one above.'
+              : stage0.groups
+                  .map((g) => `${g.name} (${g.format})`)
+                  .join(' · ')}
+          </p>
+        </li>
+        {bracket.map((stage, idx) => (
+          <StageEditor
+            key={stage.id}
+            stage={stage}
+            stageIndex={idx + 1}
+            upstreamStages={allStages.slice(0, idx + 1)}
+            onChange={(next) => updateStage(idx, next)}
+            onDelete={() => {
+              if (
+                window.confirm(
+                  `Delete stage "${stage.label}"? Existing matches with stageId="${stage.id}" stay in the DB.`,
+                )
+              ) {
+                setBracket(bracket.filter((_, i) => i !== idx));
+              }
+            }}
+            onGenerate={async () => {
+              const empty = stage.groups.find(
+                (g) => g.source.kind !== 'advanced' || g.source.from.length === 0,
+              );
+              if (empty) {
+                window.alert(
+                  `Group "${empty.name}" has no source slots configured yet.`,
+                );
+                return;
+              }
+              const r = await generate.mutateAsync(stage);
+              window.alert(
+                `Created ${r.created} placeholder match${r.created === 1 ? '' : 'es'}` +
+                  (r.skipped > 0 ? `. Skipped ${r.skipped} duplicates.` : '.'),
+              );
+            }}
+            generating={generate.isPending && generate.variables?.id === stage.id}
+          />
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function StageEditor({
+  stage,
+  stageIndex,
+  upstreamStages,
+  onChange,
+  onDelete,
+  onGenerate,
+  generating,
+}: {
+  stage: BracketStage;
+  stageIndex: number;
+  upstreamStages: BracketStage[];
+  onChange: (next: BracketStage) => void;
+  onDelete: () => void;
+  onGenerate: () => void;
+  generating: boolean;
+}) {
+  const addGroup = () => {
+    const used = new Set(stage.groups.map((g) => g.id));
+    const id = nextBracketGroupId(stage.id, used);
+    onChange({
+      ...stage,
+      groups: [
+        ...stage.groups,
+        {
+          id,
+          name: id,
+          format: 'knockout',
+          advances: 1,
+          source: { kind: 'advanced', from: [] },
+        },
+      ],
+    });
+  };
+  const updateGroup = (idx: number, next: BracketGroup) => {
+    const copy = [...stage.groups];
+    copy[idx] = next;
+    onChange({ ...stage, groups: copy });
+  };
+  const removeGroup = (idx: number) => {
+    onChange({ ...stage, groups: stage.groups.filter((_, i) => i !== idx) });
+  };
+
+  return (
+    <li className="rounded-xl border border-line bg-bg-card p-3">
+      <header className="flex items-center gap-2">
+        <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-dim">
+          Stage {stageIndex + 1}
+        </span>
+        <input
+          value={stage.label}
+          onChange={(e) => onChange({ ...stage, label: e.target.value })}
+          className="flex-1 rounded-md border border-line bg-bg px-2 py-1 font-display text-sm uppercase"
+        />
+        <Button
+          variant="ghost"
+          type="button"
+          className="!w-auto !px-2 !py-1 text-[10px]"
+          onClick={onDelete}
+          style={{ color: 'var(--accent)' }}
+        >
+          ×
+        </Button>
+      </header>
+
+      <div className="mt-2 flex flex-col gap-2">
+        {stage.groups.length === 0 ? (
+          <p className="rounded-md border border-dashed border-line px-2 py-1.5 text-center font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+            No groups in this stage
+          </p>
+        ) : (
+          stage.groups.map((g, idx) => (
+            <BracketGroupEditor
+              key={g.id}
+              group={g}
+              upstreamStages={upstreamStages}
+              onChange={(next) => updateGroup(idx, next)}
+              onDelete={() => removeGroup(idx)}
+            />
+          ))
+        )}
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            variant="ghost"
+            type="button"
+            className="!w-auto !px-2.5 !py-1 text-[10px]"
+            onClick={addGroup}
+          >
+            + Add group
+          </Button>
+          {stage.groups.length > 0 && (
+            <Button
+              type="button"
+              className="!w-auto !px-2.5 !py-1 text-[10px]"
+              onClick={onGenerate}
+              disabled={generating}
+            >
+              {generating ? 'Generating…' : 'Generate matches'}
+            </Button>
+          )}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function BracketGroupEditor({
+  group,
+  upstreamStages,
+  onChange,
+  onDelete,
+}: {
+  group: BracketGroup;
+  upstreamStages: BracketStage[];
+  onChange: (next: BracketGroup) => void;
+  onDelete: () => void;
+}) {
+  // Enumerate every available source slot = upstream stage × group × rank.
+  // Each group exposes ranks 1..advances. The legacy stage-0 groups
+  // (stage.groups[i]) expose only rank 1 by default; admin can bump
+  // each group's `advances` on the next stage's group source.
+  const slotOptions = useMemo(() => {
+    const out: { value: string; label: string; slot: AdvancedSlot }[] = [];
+    for (const stage of upstreamStages) {
+      for (const g of stage.groups) {
+        const maxRank = Math.max(1, g.advances ?? 1);
+        for (let r = 1; r <= maxRank; r += 1) {
+          out.push({
+            value: `${stage.id}|${g.id}|${r}`,
+            label: `${rankWord(r)} of ${g.name} (${stage.label})`,
+            slot: { fromStageId: stage.id, fromGroupId: g.id, rank: r },
+          });
+        }
+      }
+    }
+    return out;
+  }, [upstreamStages]);
+
+  const from = group.source.kind === 'advanced' ? group.source.from : [];
+
+  const setSlot = (idx: number, value: string) => {
+    const found = slotOptions.find((o) => o.value === value);
+    if (!found) return;
+    const next = [...from];
+    next[idx] = found.slot;
+    onChange({ ...group, source: { kind: 'advanced', from: next } });
+  };
+  const addSlot = () => {
+    if (slotOptions.length === 0) return;
+    onChange({
+      ...group,
+      source: { kind: 'advanced', from: [...from, slotOptions[0]!.slot] },
+    });
+  };
+  const removeSlot = (idx: number) => {
+    onChange({
+      ...group,
+      source: {
+        kind: 'advanced',
+        from: from.filter((_, i) => i !== idx),
+      },
+    });
+  };
+
+  return (
+    <div className="rounded-md border border-line bg-bg px-2 py-1.5">
+      <div className="flex items-center gap-1.5">
+        <input
+          value={group.name}
+          onChange={(e) => onChange({ ...group, name: e.target.value })}
+          className="flex-1 rounded border border-line bg-bg-card px-2 py-0.5 text-[12px]"
+        />
+        <select
+          value={group.format}
+          onChange={(e) =>
+            onChange({ ...group, format: e.target.value as 'round-robin' | 'knockout' })
+          }
+          className="rounded border border-line bg-bg-card px-1 py-0.5 text-[10px] uppercase"
+        >
+          <option value="knockout">Knockout</option>
+          <option value="round-robin">Round-robin</option>
+        </select>
+        <label className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.06em] text-ink-dim">
+          Advances
+          <input
+            type="number"
+            min={1}
+            max={8}
+            value={group.advances}
+            onChange={(e) =>
+              onChange({ ...group, advances: Math.max(1, Number(e.target.value) || 1) })
+            }
+            className="w-12 rounded border border-line bg-bg-card px-1 py-0.5 text-[12px]"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="font-mono text-[12px] text-ink-mute hover:text-accent"
+          aria-label="Remove group"
+        >
+          ×
+        </button>
+      </div>
+      <div className="mt-1.5 flex flex-col gap-1">
+        <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-mute">
+          Teams from
+        </p>
+        {from.length === 0 ? (
+          <p className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+            No source slots yet
+          </p>
+        ) : (
+          from.map((slot, idx) => (
+            <div key={idx} className="flex items-center gap-1">
+              <select
+                value={`${slot.fromStageId}|${slot.fromGroupId}|${slot.rank}`}
+                onChange={(e) => setSlot(idx, e.target.value)}
+                className="flex-1 rounded border border-line bg-bg-card px-1 py-0.5 text-[11px]"
+              >
+                {slotOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => removeSlot(idx)}
+                className="font-mono text-[12px] text-ink-mute hover:text-accent"
+                aria-label="Remove slot"
+              >
+                ×
+              </button>
+            </div>
+          ))
+        )}
+        <Button
+          variant="ghost"
+          type="button"
+          className="!w-auto !self-start !px-2 !py-0.5 text-[10px]"
+          onClick={addSlot}
+          disabled={slotOptions.length === 0}
+        >
+          + Add slot
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function rankWord(n: number): string {
+  if (n === 1) return 'Winner';
+  if (n === 2) return 'Runner-up';
+  return `Rank ${n}`;
+}
+
+function nextStageId(used: Set<string>): string {
+  const candidates = ['qf', 'sf', 'f', 'r16', 'r32'];
+  for (const c of candidates) if (!used.has(c)) return c;
+  for (let i = 2; i < 99; i += 1) {
+    const id = `s${i}`;
+    if (!used.has(id)) return id;
+  }
+  return `s${Math.floor(Math.random() * 1e4)}`;
+}
+
+function stageLabelFor(id: string): string {
+  switch (id) {
+    case 'qf':
+      return 'Quarterfinals';
+    case 'sf':
+      return 'Semifinals';
+    case 'f':
+      return 'Final';
+    case 'r16':
+      return 'Round of 16';
+    case 'r32':
+      return 'Round of 32';
+    default:
+      return id.toUpperCase();
+  }
+}
+
+function nextBracketGroupId(stageId: string, used: Set<string>): string {
+  // QF1, QF2, … for knockouts; A, B, … fallback.
+  const prefix = stageId.toUpperCase();
+  for (let i = 1; i < 99; i += 1) {
+    const id = `${prefix}${i}`;
+    if (!used.has(id)) return id;
+  }
+  return `${prefix}-X`;
+}
+
+function slotKey(slot: AdvancedSlot | null | undefined): string {
+  if (!slot) return '';
+  return `${slot.fromStageId}/${slot.fromGroupId}#${slot.rank}`;
 }
 
 function nextGroupId(used: Set<string>): string {
