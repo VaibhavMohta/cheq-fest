@@ -317,8 +317,48 @@ function MatchesTabInner({
     (s) => typeof s.name === 'string' && s.name.trim().length > 0,
   );
 
+  // Detect bracket groups stuck on a tie — heuristic: all matches in
+  // the group are final, but downstream matches with teamASlot/B
+  // pointing at this group still have empty teamA/B. Surfaced as a
+  // banner so admins know to use the inline override on the listed
+  // downstream matches.
+  const tiedGroups = useMemo(
+    () => detectTiedGroups(matches.data ?? [], availableSports),
+    [matches.data, availableSports],
+  );
+
   return (
     <div className="mx-5 flex flex-col gap-5">
+      {tiedGroups.length > 0 && (
+        <div
+          className="rounded-xl border px-3 py-2"
+          style={{
+            borderColor: 'color-mix(in oklab, var(--accent) 50%, transparent)',
+            background: 'color-mix(in oklab, var(--accent) 8%, transparent)',
+          }}
+        >
+          <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-accent">
+            Tie-breakers needed
+          </p>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
+            These groups finished but auto-advance couldn't pick a
+            ranked team. Use the Teams (admin override) picker on each
+            downstream match below to set the team manually.
+          </p>
+          <ul className="mt-1.5 flex flex-col gap-0.5 font-mono text-[10px]">
+            {tiedGroups.map((t) => (
+              <li key={`${t.sportId}/${t.stageId}/${t.groupId}`} className="text-ink">
+                <span className="text-ink-mute">
+                  {t.sportName} ·
+                </span>{' '}
+                Group {t.groupName} → {t.downstream} downstream match
+                {t.downstream === 1 ? '' : 'es'} waiting
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <CreateMatchForm
         sports={availableSports}
         teams={availableTeams}
@@ -339,6 +379,81 @@ function MatchesTabInner({
       />
     </div>
   );
+}
+
+/** Heuristic tie detector. A group is "stuck" when:
+ *   1. all matches in (sport, stage, group) have status 'final', AND
+ *   2. at least one downstream match still has an empty teamA/teamB
+ *      and a teamASlot/B pointing back at this (stage, group).
+ *
+ * Phase 1's resolveBracket bails out of round-robin ranking when
+ * scores tie at the cutoff; this banner picks up that signal so
+ * admins can finish the call manually via the override picker. */
+function detectTiedGroups(
+  matches: (MatchDoc & { id: string })[],
+  sports: { id: string; name: string; tournament?: TournamentConfig | null }[],
+): { sportId: string; sportName: string; stageId: string; groupId: string; groupName: string; downstream: number }[] {
+  const result: {
+    sportId: string;
+    sportName: string;
+    stageId: string;
+    groupId: string;
+    groupName: string;
+    downstream: number;
+  }[] = [];
+  // Group by (sport, stage, group) once.
+  const byGroup = new Map<string, (MatchDoc & { id: string })[]>();
+  for (const m of matches) {
+    const stageId = m.stageId ?? null;
+    const groupId = m.groupId ?? m.group ?? null;
+    if (!stageId || !groupId) continue;
+    const key = `${m.sportId}/${stageId}/${groupId}`;
+    const arr = byGroup.get(key) ?? [];
+    arr.push(m);
+    byGroup.set(key, arr);
+  }
+  for (const [key, groupMatches] of byGroup.entries()) {
+    const allFinal = groupMatches.every((m) => m.status === 'final');
+    if (!allFinal) continue;
+    const [sportId, stageId, groupId] = key.split('/');
+    if (!sportId || !stageId || !groupId) continue;
+    // Count downstream matches still waiting on this group.
+    let downstream = 0;
+    for (const m of matches) {
+      if (m.sportId !== sportId) continue;
+      if (
+        !m.teamAId &&
+        m.teamASlot?.fromStageId === stageId &&
+        m.teamASlot?.fromGroupId === groupId
+      ) {
+        downstream += 1;
+      }
+      if (
+        !m.teamBId &&
+        m.teamBSlot?.fromStageId === stageId &&
+        m.teamBSlot?.fromGroupId === groupId
+      ) {
+        downstream += 1;
+      }
+    }
+    if (downstream === 0) continue;
+    const sport = sports.find((s) => s.id === sportId);
+    if (!sport) continue;
+    const groupName =
+      sport.tournament?.bracket?.find((s) => s.id === stageId)?.groups.find((g) => g.id === groupId)
+        ?.name ??
+      sport.tournament?.groups.find((g) => g.id === groupId)?.name ??
+      groupId;
+    result.push({
+      sportId,
+      sportName: sport.name,
+      stageId,
+      groupId,
+      groupName,
+      downstream,
+    });
+  }
+  return result;
 }
 
 function CreateMatchForm({

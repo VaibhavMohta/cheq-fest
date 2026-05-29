@@ -227,6 +227,21 @@ function LeaderboardScreen() {
           </span>
         </Link>
 
+        <Link
+          to="/bracket"
+          className="mx-5 mb-3 flex items-center justify-between gap-3 rounded-xl border border-line bg-bg-card px-3 py-2.5 transition active:scale-[0.99] hover:border-ink-dim"
+        >
+          <span className="flex flex-col">
+            <span className="font-display text-sm uppercase tracking-[0.04em]">
+              Match tree
+            </span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim">
+              See the bracket per sport · auto-advances on result
+            </span>
+          </span>
+          <span aria-hidden className="font-mono text-[14px] text-ink-mute">→</span>
+        </Link>
+
         {/* Sport pill row. Overall is always the first. */}
         <div className="-mx-1 mb-2 flex gap-2 overflow-x-auto px-5 pb-2">
           <FilterPill active={sportFilter === ''} onClick={() => {
