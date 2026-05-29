@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, createFileRoute } from '@tanstack/react-router';
 import { onSnapshot } from 'firebase/firestore';
 import { TopBar } from '@/components/shared/TopBar';
@@ -8,18 +8,50 @@ import { IconButton } from '@/components/shared/IconButton';
 import { InstallPrompt } from '@/components/shared/InstallPrompt';
 import { MenuIcon } from '@/components/shared/icons';
 import { useActiveEvent } from '@/lib/activeEvent';
-import { sportsCol, teamsCol } from '@/lib/db';
+import { matchesCol, sportsCol, teamsCol } from '@/lib/db';
 import type { Timestamp } from 'firebase/firestore';
-
+import type { MatchDoc } from '@/types/match';
+import { colorVarFor } from '@/types/team';
 export const Route = createFileRoute('/')({
   component: HomeScreen,
 });
 
-const liveMatches: never[] = [];
-const todaysMatches: never[] = [];
 const standings: never[] = [];
 
+type TeamLite = { id: string; name: string; color: string };
+type MatchWithId = MatchDoc & { id: string };
+
 function HomeScreen() {
+  const { activeEventId } = useActiveEvent();
+  const { matches, sports, teams } = useHomeData(activeEventId);
+
+  // Live = status 'live'. Today = scheduled to start within today's
+  // calendar window (00:00 → 23:59 local) AND not yet final. The two
+  // sets are disjoint: a live match doesn't double up in Today.
+  const { live, today } = useMemo(() => {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const endOfDay = startOfDay + 24 * 60 * 60 * 1000;
+    const live: MatchWithId[] = [];
+    const today: MatchWithId[] = [];
+    for (const m of matches) {
+      if (m.status === 'live') {
+        live.push(m);
+        continue;
+      }
+      if (m.status === 'final') continue;
+      const start = m.scheduledStart?.toMillis();
+      if (start != null && start >= startOfDay && start < endOfDay) {
+        today.push(m);
+      }
+    }
+    today.sort(
+      (a, b) =>
+        (a.scheduledStart?.toMillis() ?? 0) - (b.scheduledStart?.toMillis() ?? 0),
+    );
+    return { live, today };
+  }, [matches]);
+
   return (
     <>
       <TopBar
@@ -34,23 +66,37 @@ function HomeScreen() {
         <InstallPrompt />
         <Hero />
 
-        <SectionTitle trailing={liveMatches.length === 0 ? undefined : 'ALL →'}>
-          Live Now
-        </SectionTitle>
-        {liveMatches.length === 0 ? (
+        <SectionTitle>Live Now</SectionTitle>
+        {live.length === 0 ? (
           <EmptyState
             title="No live matches"
             hint="Live cards appear here the moment a referee starts a match."
           />
-        ) : null}
+        ) : (
+          <ul className="mx-5 flex flex-col gap-2">
+            {live.map((m) => (
+              <li key={m.id}>
+                <MatchCard match={m} sports={sports} teams={teams} live />
+              </li>
+            ))}
+          </ul>
+        )}
 
         <SectionTitle>Today</SectionTitle>
-        {todaysMatches.length === 0 ? (
+        {today.length === 0 ? (
           <EmptyState
             title="Schedule not posted"
             hint="Admin will publish the match schedule once teams are confirmed."
           />
-        ) : null}
+        ) : (
+          <ul className="mx-5 flex flex-col gap-2">
+            {today.map((m) => (
+              <li key={m.id}>
+                <MatchCard match={m} sports={sports} teams={teams} />
+              </li>
+            ))}
+          </ul>
+        )}
 
         <SectionTitle trailing={<Link to="/leaderboard">FULL BOARD →</Link>}>
           Standings
@@ -230,6 +276,144 @@ function splitEventName(
     return { primary: name, accent: `'${String(year).slice(-2)}` };
   }
   return { primary: name, accent: '' };
+}
+
+/**
+ * Subscribe to the three collections the home screen needs (matches,
+ * sports, teams) for the active event. Returns plain arrays; refs are
+ * cleaned up on event-id change.
+ */
+function useHomeData(activeEventId: string | null): {
+  matches: MatchWithId[];
+  sports: Map<string, string>;
+  teams: Map<string, TeamLite>;
+} {
+  const [matches, setMatches] = useState<MatchWithId[]>([]);
+  const [sports, setSports] = useState<Map<string, string>>(new Map());
+  const [teams, setTeams] = useState<Map<string, TeamLite>>(new Map());
+
+  useEffect(() => {
+    if (!activeEventId) {
+      setMatches([]);
+      setSports(new Map());
+      setTeams(new Map());
+      return;
+    }
+    const unsubM = onSnapshot(
+      matchesCol(activeEventId),
+      (snap) =>
+        setMatches(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      () => setMatches([]),
+    );
+    const unsubS = onSnapshot(
+      sportsCol(activeEventId),
+      (snap) => {
+        const next = new Map<string, string>();
+        for (const d of snap.docs) next.set(d.id, d.data().name ?? d.id);
+        setSports(next);
+      },
+      () => setSports(new Map()),
+    );
+    const unsubT = onSnapshot(
+      teamsCol(activeEventId),
+      (snap) => {
+        const next = new Map<string, TeamLite>();
+        for (const d of snap.docs) {
+          const data = d.data();
+          next.set(d.id, {
+            id: d.id,
+            name: data.name ?? d.id,
+            color: data.color ?? '',
+          });
+        }
+        setTeams(next);
+      },
+      () => setTeams(new Map()),
+    );
+    return () => {
+      unsubM();
+      unsubS();
+      unsubT();
+    };
+  }, [activeEventId]);
+
+  return { matches, sports, teams };
+}
+
+function MatchCard({
+  match,
+  sports,
+  teams,
+  live = false,
+}: {
+  match: MatchWithId;
+  sports: Map<string, string>;
+  teams: Map<string, TeamLite>;
+  live?: boolean;
+}) {
+  const sportName = sports.get(match.sportId) ?? match.sportId;
+  const a = teams.get(match.teamAId);
+  const b = teams.get(match.teamBId);
+  const startLabel = match.scheduledStart
+    ? match.scheduledStart.toDate().toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : 'TBD';
+  return (
+    <div className="rounded-2xl border border-line bg-bg-card px-4 py-3">
+      <div className="flex items-center justify-between">
+        <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
+          {sportName}
+          {match.matchNumber != null && (
+            <span className="ml-2 text-ink-mute">#{match.matchNumber}</span>
+          )}
+        </p>
+        <p
+          className="font-mono text-[10px] uppercase tracking-[0.12em]"
+          style={{ color: live ? 'var(--accent)' : 'var(--ink-dim)' }}
+        >
+          {live ? '● Live' : startLabel}
+        </p>
+      </div>
+      <div className="mt-2 flex items-center gap-3">
+        <TeamLine team={a} score={live ? match.state.scoreA : null} />
+        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">vs</span>
+        <TeamLine team={b} score={live ? match.state.scoreB : null} align="right" />
+      </div>
+      {match.venue && (
+        <p className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
+          {match.venue}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function TeamLine({
+  team,
+  score,
+  align = 'left',
+}: {
+  team: TeamLite | undefined;
+  score: number | null;
+  align?: 'left' | 'right';
+}) {
+  return (
+    <div className={`flex flex-1 items-center gap-2 ${align === 'right' ? 'justify-end' : ''}`}>
+      <span
+        aria-hidden
+        className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+        style={{ background: colorVarFor(team?.color) }}
+      />
+      <span className="truncate font-display text-sm uppercase">
+        {team?.name ?? '—'}
+      </span>
+      {score != null && (
+        <span className="font-display text-base text-accent-2">{score}</span>
+      )}
+    </div>
+  );
 }
 
 function Stat({ value, label }: { value: string; label: string }) {
