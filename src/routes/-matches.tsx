@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { onSnapshot } from 'firebase/firestore';
+import { useQuery } from '@tanstack/react-query';
+import { getDoc, onSnapshot } from 'firebase/firestore';
 import { TopBar } from '@/components/shared/TopBar';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { EventBar } from '@/components/shared/EventBar';
 import { SectionTitle } from '@/components/shared/SectionTitle';
 import { SportIcon } from '@/components/shared/SportIcon';
 import { useActiveEvent } from '@/lib/activeEvent';
-import { matchesCol, sportsCol, teamsCol } from '@/lib/db';
+import { matchesCol, rosterRef, sportsCol, teamsCol, type RosterDoc } from '@/lib/db';
+import { useAllEventPlayers } from '@/lib/playerDirectory';
+import { displayEmail } from '@/lib/syntheticEmail';
 import { colorVarFor, teamTextOnPage } from '@/types/team';
 import type { MatchDoc } from '@/types/match';
 import type { SportDoc } from '@/types/sport';
@@ -175,6 +178,7 @@ export default function MatchesScreen() {
               sportsById={sportsById}
               teamsById={teamsById}
               variant="live"
+              eventId={activeEventId}
             />
             <Section
               title="Scheduled"
@@ -183,6 +187,7 @@ export default function MatchesScreen() {
               sportsById={sportsById}
               teamsById={teamsById}
               variant="scheduled"
+              eventId={activeEventId}
             />
             <Section
               title="Ended"
@@ -191,6 +196,7 @@ export default function MatchesScreen() {
               sportsById={sportsById}
               teamsById={teamsById}
               variant="ended"
+              eventId={activeEventId}
             />
           </>
         )}
@@ -237,6 +243,7 @@ function Section({
   sportsById,
   teamsById,
   variant,
+  eventId,
 }: {
   title: string;
   count: number;
@@ -244,6 +251,7 @@ function Section({
   sportsById: Map<string, SportWithId>;
   teamsById: Map<string, TeamWithId>;
   variant: 'live' | 'scheduled' | 'ended';
+  eventId: string;
 }) {
   if (count === 0) return null;
   return (
@@ -260,6 +268,7 @@ function Section({
               teamA={m.teamAId ? teamsById.get(m.teamAId) ?? null : null}
               teamB={m.teamBId ? teamsById.get(m.teamBId) ?? null : null}
               variant={variant}
+              eventId={eventId}
             />
           </li>
         ))}
@@ -274,13 +283,16 @@ function MatchRow({
   teamA,
   teamB,
   variant,
+  eventId,
 }: {
   match: MatchWithId;
   sport: SportWithId | null;
   teamA: TeamWithId | null;
   teamB: TeamWithId | null;
   variant: 'live' | 'scheduled' | 'ended';
+  eventId: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const sportName = sport?.name ?? match.sportId;
   const aLabel = teamA?.name ?? match.teamAId ?? 'TBD';
   const bLabel = teamB?.name ?? match.teamBId ?? 'TBD';
@@ -306,22 +318,28 @@ function MatchRow({
         : { text: startLabel, color: 'var(--ink-dim)' };
 
   return (
-    <article className="flex overflow-hidden rounded-2xl border border-line bg-bg-card">
-      {/* Sport icon banner — fills the full card height, ~18% of the
-          card width on a 380px viewport. Tinted background so the
-          color-graded glyph reads against the dark card. */}
-      <div
-        className="flex w-[68px] shrink-0 items-center justify-center border-r border-line p-2"
-        style={{
-          background:
-            'linear-gradient(135deg, color-mix(in oklab, var(--bg-elev) 80%, transparent), var(--bg-card))',
-        }}
-        aria-hidden
+    <article className="overflow-hidden rounded-2xl border border-line bg-bg-card">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="flex w-full text-left transition active:scale-[0.997] hover:bg-bg-elev/30"
       >
-        <SportIcon sportName={sportName} arenaType={sport?.arenaType} size={44} />
-      </div>
+        {/* Sport icon banner — fills the full card height, ~18% of the
+            card width on a 380px viewport. Tinted background so the
+            color-graded glyph reads against the dark card. */}
+        <div
+          className="flex w-[68px] shrink-0 items-center justify-center border-r border-line p-2"
+          style={{
+            background:
+              'linear-gradient(135deg, color-mix(in oklab, var(--bg-elev) 80%, transparent), var(--bg-card))',
+          }}
+          aria-hidden
+        >
+          <SportIcon sportName={sportName} arenaType={sport?.arenaType} size={44} />
+        </div>
 
-      <div className="flex min-w-0 flex-1 flex-col px-3 py-3">
+        <div className="flex min-w-0 flex-1 flex-col px-3 py-3">
         <header className="flex items-baseline justify-between gap-2">
           <p className="truncate font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
             {sportName}
@@ -381,8 +399,196 @@ function MatchRow({
           )}
         </p>
       )}
-      </div>
+        </div>
+      </button>
+
+      {expanded && (
+        <ExpandedRosterPanel
+          eventId={eventId}
+          sportId={match.sportId}
+          teamA={teamA}
+          teamB={teamB}
+        />
+      )}
     </article>
+  );
+}
+
+/**
+ * Lazy-loaded roster strip rendered when the user taps a match row.
+ * One column per side — pitch / tentative / substitutes for each
+ * team, name-resolved against the public player directory so we
+ * show real names instead of bare emails. Captain on each side
+ * highlighted with a cyan SC chip. */
+function ExpandedRosterPanel({
+  eventId,
+  sportId,
+  teamA,
+  teamB,
+}: {
+  eventId: string;
+  sportId: string;
+  teamA: TeamWithId | null;
+  teamB: TeamWithId | null;
+}) {
+  const { people } = useAllEventPlayers();
+  const nameByEmail = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of people) m.set(p.email.toLowerCase(), p.name);
+    return m;
+  }, [people]);
+
+  return (
+    <div className="grid grid-cols-2 gap-2 border-t border-line bg-bg/40 p-3">
+      <RosterColumn
+        eventId={eventId}
+        sportId={sportId}
+        team={teamA}
+        nameByEmail={nameByEmail}
+      />
+      <RosterColumn
+        eventId={eventId}
+        sportId={sportId}
+        team={teamB}
+        nameByEmail={nameByEmail}
+      />
+    </div>
+  );
+}
+
+function RosterColumn({
+  eventId,
+  sportId,
+  team,
+  nameByEmail,
+}: {
+  eventId: string;
+  sportId: string;
+  team: TeamWithId | null;
+  nameByEmail: Map<string, string>;
+}) {
+  const teamColor = team ? colorVarFor(team.color) : 'var(--ink-mute)';
+  // One-shot fetch per (team, sport). React Query caches it so
+  // collapsing + re-expanding the same match doesn't refetch.
+  const roster = useQuery({
+    queryKey: ['matches-screen', 'roster', eventId, team?.id, sportId],
+    enabled: !!team?.id && !!sportId,
+    queryFn: async (): Promise<RosterDoc | null> => {
+      if (!team?.id) return null;
+      const snap = await getDoc(rosterRef(eventId, team.id, sportId));
+      return snap.exists() ? snap.data() : null;
+    },
+  });
+
+  return (
+    <div
+      className="flex flex-col gap-1.5 rounded-xl border bg-bg-card p-2"
+      style={{
+        borderColor: `color-mix(in oklab, ${teamColor} 40%, var(--line))`,
+      }}
+    >
+      <header className="flex items-center gap-1.5">
+        <span
+          aria-hidden
+          className="inline-block h-2.5 w-2.5 rounded-full"
+          style={{ background: teamColor }}
+        />
+        <p
+          className="truncate font-display text-[12px] uppercase"
+          style={{ color: teamTextOnPage(team?.color) }}
+        >
+          {team?.name ?? 'TBD'}
+        </p>
+      </header>
+
+      {roster.isLoading ? (
+        <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-mute">
+          Loading…
+        </p>
+      ) : !roster.data ? (
+        <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-mute">
+          Lineup not set
+        </p>
+      ) : (
+        <>
+          <BucketChips
+            label="On the pitch"
+            color="var(--accent)"
+            emails={roster.data.pitch ?? []}
+            captainEmail={roster.data.sportCaptainEmail}
+            nameByEmail={nameByEmail}
+          />
+          <BucketChips
+            label="Tentative"
+            color="var(--accent-2)"
+            emails={roster.data.tentative ?? []}
+            captainEmail={roster.data.sportCaptainEmail}
+            nameByEmail={nameByEmail}
+          />
+          <BucketChips
+            label="Substitutes"
+            color="var(--accent-3)"
+            emails={roster.data.substitutes ?? []}
+            captainEmail={roster.data.sportCaptainEmail}
+            nameByEmail={nameByEmail}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+function BucketChips({
+  label,
+  color,
+  emails,
+  captainEmail,
+  nameByEmail,
+}: {
+  label: string;
+  color: string;
+  emails: string[];
+  captainEmail: string | null;
+  nameByEmail: Map<string, string>;
+}) {
+  if (emails.length === 0) return null;
+  const cap = captainEmail?.toLowerCase() ?? null;
+  return (
+    <div>
+      <p className="font-mono text-[9px] uppercase tracking-[0.12em]" style={{ color }}>
+        {label} <span className="text-ink-mute">· {emails.length}</span>
+      </p>
+      <ul className="mt-0.5 flex flex-wrap gap-1">
+        {emails.map((rawEmail) => {
+          const email = rawEmail.toLowerCase();
+          const name =
+            nameByEmail.get(email) ?? displayEmail(rawEmail).split('@')[0] ?? rawEmail;
+          const isCap = cap === email;
+          return (
+            <li
+              key={email}
+              className="rounded-md border px-1.5 py-0.5 font-mono text-[10px] text-ink"
+              style={{
+                borderColor: isCap
+                  ? 'var(--accent-3)'
+                  : 'color-mix(in oklab, var(--line) 80%, transparent)',
+                background: 'var(--bg)',
+              }}
+            >
+              {name}
+              {isCap && (
+                <span
+                  className="ml-1 text-[8px] uppercase tracking-[0.06em]"
+                  style={{ color: 'var(--accent-3)' }}
+                >
+                  · SC
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
