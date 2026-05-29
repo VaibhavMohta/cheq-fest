@@ -58,6 +58,19 @@ function ProfileScreen() {
           >
             Sign in
           </Link>
+          {/* Public tiles — same in the signed-in branch below. Rules
+              moved here from the bottom TabBar so signed-out spectators
+              can still browse the rulebook. */}
+          <div className="-mx-5">
+            <SectionTitle>Read</SectionTitle>
+            <div className="mx-5 flex flex-col gap-2">
+              <QuickActionTile
+                to="/rulebook"
+                label="Rules & Points"
+                sub="Sport configs + scoring · always up to date"
+              />
+            </div>
+          </div>
         </main>
       </>
     );
@@ -109,6 +122,11 @@ function ProfileScreen() {
         <div className="mx-5 flex flex-col gap-2">
           <QuickActionTile to="/leaderboard" label="My Team" sub="Standings + roster" />
           <QuickActionTile to="/arena" label="Live Now" sub="Animated arena" />
+          <QuickActionTile
+            to="/rulebook"
+            label="Rules & Points"
+            sub="Sport configs + scoring"
+          />
 
           {(isRef || role.is('admin') || role.is('super-admin')) && (
             <QuickActionTile

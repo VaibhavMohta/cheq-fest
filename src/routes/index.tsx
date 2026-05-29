@@ -87,6 +87,16 @@ function HomeScreen() {
       />
       <main className="mx-auto max-w-[420px] pb-28">
         <InstallPrompt />
+
+        {/* Board lives at the top so the leaderboard is the first
+            thing every visitor sees on Home. Full team list (not just
+            top 3); 'FULL BOARD →' jumps to /leaderboard for sport /
+            group filters + bonus award breakdown. */}
+        <SectionTitle trailing={<Link to="/leaderboard">FULL BOARD →</Link>}>
+          Standings
+        </SectionTitle>
+        <Standings teams={teams} limit={null} />
+
         <Hero />
 
         <SectionTitle>Live Now</SectionTitle>
@@ -159,11 +169,6 @@ function HomeScreen() {
             ))}
           </ul>
         )}
-
-        <SectionTitle trailing={<Link to="/leaderboard">FULL BOARD →</Link>}>
-          Standings
-        </SectionTitle>
-        <Standings teams={teams} />
 
         <SectionTitle trailing={<Link to="/rulebook">OPEN →</Link>}>The Rulebook</SectionTitle>
         <Link
@@ -398,15 +403,23 @@ function useHomeData(activeEventId: string | null): {
   return { matches, sports, teams };
 }
 
-function Standings({ teams }: { teams: Map<string, TeamLite> }) {
-  // Show the top 3 by totalPoints. Anything beyond lives at /leaderboard.
-  // Zero-point teams still render so users see "everyone's on 0" instead
-  // of an empty state on day 1.
-  const ranked = useMemo(
-    () =>
-      [...teams.values()].sort((a, b) => b.totalPoints - a.totalPoints).slice(0, 3),
-    [teams],
-  );
+function Standings({
+  teams,
+  limit = 3,
+}: {
+  teams: Map<string, TeamLite>;
+  /** Max rows to show. `null` renders every team. Default 3 = original
+   *  podium-style snippet (still used elsewhere if reintroduced). */
+  limit?: number | null;
+}) {
+  // Sort by totalPoints. Zero-point teams still render so users see
+  // "everyone's on 0" instead of an empty state on day 1.
+  const ranked = useMemo(() => {
+    const sorted = [...teams.values()].sort(
+      (a, b) => b.totalPoints - a.totalPoints,
+    );
+    return limit == null ? sorted : sorted.slice(0, limit);
+  }, [teams, limit]);
   if (ranked.length === 0) {
     return (
       <EmptyState

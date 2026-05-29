@@ -9,7 +9,6 @@ import {
   ProfileIcon,
   RefereeIcon,
   RostersIcon,
-  RulebookIcon,
 } from './icons';
 
 type Item = {
@@ -25,7 +24,8 @@ const ITEMS: readonly Item[] = [
   { to: '/players', label: 'Players', Icon: PlayersIcon },
   { to: '/rosters', label: 'Rosters', Icon: RostersIcon },
   { to: '/referee', label: 'Ref', Icon: RefereeIcon },
-  { to: '/rulebook', label: 'Rules', Icon: RulebookIcon },
+  // Rules moved into the Me / Profile screen so the bottom nav stays
+  // tight; rules tile renders for everyone (incl. signed-out users).
   { to: '/profile', label: 'Me', Icon: ProfileIcon },
 ];
 
@@ -33,7 +33,7 @@ export function TabBar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
     <nav
-      className="fixed inset-x-3 bottom-3 z-50 grid grid-cols-8 gap-0.5 rounded-3xl border border-line p-1.5"
+      className="fixed inset-x-3 bottom-3 z-50 grid grid-cols-7 gap-1 rounded-3xl border border-line p-2"
       style={{
         background: 'color-mix(in oklab, var(--bg-card) 92%, transparent)',
         backdropFilter: 'blur(20px)',
