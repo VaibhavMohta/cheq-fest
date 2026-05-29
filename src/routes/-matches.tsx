@@ -4,6 +4,7 @@ import { TopBar } from '@/components/shared/TopBar';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { EventBar } from '@/components/shared/EventBar';
 import { SectionTitle } from '@/components/shared/SectionTitle';
+import { SportIcon } from '@/components/shared/SportIcon';
 import { useActiveEvent } from '@/lib/activeEvent';
 import { matchesCol, sportsCol, teamsCol } from '@/lib/db';
 import { colorVarFor, teamTextOnPage } from '@/types/team';
@@ -307,10 +308,11 @@ function MatchRow({
   return (
     <article className="rounded-2xl border border-line bg-bg-card px-4 py-3">
       <header className="flex items-baseline justify-between gap-2">
-        <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
+        <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
+          <SportIcon sportName={sportName} arenaType={sport?.arenaType} size={14} />
           {sportName}
           {match.matchNumber != null && (
-            <span className="ml-2 text-ink-mute">#{match.matchNumber}</span>
+            <span className="ml-1 text-ink-mute">#{match.matchNumber}</span>
           )}
         </p>
         <p

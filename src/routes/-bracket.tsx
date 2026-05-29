@@ -9,6 +9,7 @@ import type { BracketStage, SportDoc } from '@/types/sport';
 import type { MatchDoc } from '@/types/match';
 import type { TeamDoc } from '@/types/player';
 import { colorVarFor, inkOnTeamColor, teamTextOnPage } from '@/types/team';
+import { SportIcon } from '@/components/shared/SportIcon';
 
 type MatchWithId = MatchDoc & { id: string };
 
@@ -132,7 +133,7 @@ export default function BracketScreen() {
                   key={s.id}
                   type="button"
                   onClick={() => setSportFilter(s.id)}
-                  className="shrink-0 rounded-full border px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.06em] transition"
+                  className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.06em] transition"
                   style={
                     s.id === activeSportId
                       ? {
@@ -147,6 +148,7 @@ export default function BracketScreen() {
                         }
                   }
                 >
+                  <SportIcon sportName={s.name} arenaType={s.arenaType} size={12} />
                   {s.name}
                 </button>
               ))}

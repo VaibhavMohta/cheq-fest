@@ -13,6 +13,7 @@ import { matchesCol, sportsCol, teamsCol } from '@/lib/db';
 import type { Timestamp } from 'firebase/firestore';
 import type { MatchDoc } from '@/types/match';
 import { colorVarFor } from '@/types/team';
+import { SportIcon } from '@/components/shared/SportIcon';
 export const Route = createFileRoute('/')({
   component: HomeScreen,
 });
@@ -525,10 +526,11 @@ function MatchCard({
   return (
     <div className="rounded-2xl border border-line bg-bg-card px-4 py-3">
       <div className="flex items-center justify-between">
-        <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
+        <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
+          <SportIcon sportName={sportName} size={14} />
           {sportName}
           {match.matchNumber != null && (
-            <span className="ml-2 text-ink-mute">#{match.matchNumber}</span>
+            <span className="ml-1 text-ink-mute">#{match.matchNumber}</span>
           )}
         </p>
         <p

@@ -9,6 +9,7 @@ import { useActiveEvent } from '@/lib/activeEvent';
 import { useAllEventPlayers } from '@/lib/playerDirectory';
 import { rostersCol, sportsCol, teamsCol, type RosterDoc } from '@/lib/db';
 import { colorVarFor, inkOnTeamColor, isLightTeamColor, teamTextOnPage } from '@/types/team';
+import { SportIcon } from '@/components/shared/SportIcon';
 import type { SportDoc } from '@/types/sport';
 import type { TeamDoc } from '@/types/player';
 
@@ -293,7 +294,10 @@ function SportRosterRow({
   return (
     <article className="rounded-xl border border-line bg-bg-card px-3 py-2.5">
       <header className="flex items-baseline justify-between gap-2">
-        <h3 className="truncate font-display text-sm uppercase">{sport.name}</h3>
+        <h3 className="flex items-center gap-1.5 truncate font-display text-sm uppercase">
+          <SportIcon sportName={sport.name} arenaType={sport.arenaType} size={14} />
+          {sport.name}
+        </h3>
         <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
           {sport.playersOnField} on field · {sport.substitutes} sub
         </p>
