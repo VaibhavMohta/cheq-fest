@@ -141,6 +141,42 @@ export function teamSurfaceFor(value: string | null | undefined): string {
 }
 
 /**
+ * Foreground (text / glyph) color to use *on top of* a team-color
+ * filled surface so the content stays legible.
+ *
+ * Dark team colors (black, navy, slate, maroon, charcoal) → near-white
+ * ink so labels and avatar initials don't vanish into the chip.
+ * Light team colors (yellow, lime, white, cyan, sky) → near-black ink
+ * so the same content sits cleanly on the bright fill.
+ *
+ * This is *not* the same as {@link teamSurfaceFor}, which picks a card
+ * BACKGROUND; this picks the text COLOR painted on a team-color fill.
+ */
+export function inkOnTeamColor(value: string | null | undefined): string {
+  return isLightTeamColor(value) ? '#0a0a0a' : '#f5f1e8';
+}
+
+/**
+ * Text color to use when painting a team name (or other label) **on
+ * the page's dark background**, NOT on a team-color fill.
+ *
+ * Light team colors (yellow, lime, white, cyan, sky, …) pop naturally
+ * on the dark page, so they're returned as-is.
+ *
+ * Dark team colors (black, navy, slate, charcoal, maroon, …) would
+ * vanish into the dark bg. Brighten them by mixing with white so the
+ * team identity stays readable while still carrying the team's hue.
+ */
+export function teamTextOnPage(value: string | null | undefined): string {
+  if (!value) return 'var(--ink-dim)';
+  const teamColor = colorVarFor(value);
+  if (isLightTeamColor(value)) return teamColor;
+  // Brighten dark teams: keep enough hue to read as "the navy team",
+  // boost luminance enough to clear the page bg.
+  return `color-mix(in oklab, ${teamColor} 35%, var(--ink))`;
+}
+
+/**
  * Companion to {@link teamSurfaceFor}. Returns a same-toned but slightly
  * darker/lighter gradient endpoint so heroes that want a colour shift
  * (TeamDetail, TeamMgmt) still get one without losing contrast.

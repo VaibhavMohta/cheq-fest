@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { Link } from '@tanstack/react-router';
-import { colorVarFor, flagInitials as initialsOf, type TeamId } from '@/types/team';
+import { colorVarFor, flagInitials as initialsOf, inkOnTeamColor, type TeamId } from '@/types/team';
 
 type Props = {
   rank: number;
@@ -57,8 +57,8 @@ export function LeaderboardRow({
       </span>
       <span
         aria-hidden
-        className="grid h-11 w-11 place-items-center rounded-full font-display text-base text-bg"
-        style={{ background: colorVar }}
+        className="grid h-11 w-11 place-items-center rounded-full font-display text-base"
+        style={{ background: colorVar, color: inkOnTeamColor(teamColor) }}
       >
         {flagText}
       </span>

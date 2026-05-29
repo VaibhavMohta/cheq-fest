@@ -22,6 +22,7 @@ import {
   flagInitials,
   isLightTeamColor,
   teamSurfaceGradient,
+  teamTextOnPage,
 } from '@/types/team';
 import type { TeamDoc } from '@/types/player';
 import type { PersonRow as DirectoryPersonRow } from '@/lib/playerDirectory';
@@ -544,7 +545,7 @@ export function TeamDetail({ eventId, teamId, onClose }: Props) {
                     <span
                       className="rounded-md border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em]"
                       style={{
-                        color: colorVarFor(t.color),
+                        color: teamTextOnPage(t.color),
                         borderColor: 'color-mix(in oklab, currentColor 40%, transparent)',
                       }}
                     >

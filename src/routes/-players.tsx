@@ -10,7 +10,12 @@ import { useActiveEvent } from '@/lib/activeEvent';
 import { useAllEventPlayers } from '@/lib/playerDirectory';
 import { displayEmail } from '@/lib/syntheticEmail';
 import { rostersCol, sportsCol, teamsCol, type RosterDoc } from '@/lib/db';
-import { colorVarFor } from '@/types/team';
+import {
+  colorVarFor,
+  inkOnTeamColor,
+  isLightTeamColor,
+  teamTextOnPage,
+} from '@/types/team';
 import type { SportDoc } from '@/types/sport';
 import type { TeamDoc } from '@/types/player';
 
@@ -303,7 +308,7 @@ export default function PlayersScreen() {
                         {row.teamName && (
                           <>
                             <span className="text-ink-mute">·</span>
-                            <span style={{ color: colorVarFor(row.teamColor) }}>
+                            <span style={{ color: teamTextOnPage(row.teamColor) }}>
                               {row.teamName}
                             </span>
                           </>
@@ -458,28 +463,40 @@ function TeamPill({
   onClick: () => void;
   children: React.ReactNode;
 }) {
-  // When a team colour is set, tint the active pill with it; otherwise
-  // the default "All teams" pill uses the standard accent.
+  // When a team colour is set, fill the active pill with it (solid)
+  // and pick the text color from inkOnTeamColor so dark and light
+  // team colours both stay legible. Inactive pills use the same tint
+  // as a subtle outline, falling back to neutral ink for dark teams
+  // so the chip is readable on the dark page bg.
   const tint = color ? colorVarFor(color) : null;
+  const inactiveFg = color && !isLightTeamColor(color) ? 'var(--ink)' : tint ?? 'var(--ink-dim)';
   return (
     <button
       type="button"
       onClick={onClick}
       className={clsx(
-        'shrink-0 rounded-full border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] transition',
+        'shrink-0 rounded-full border px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.06em] transition',
         active
           ? tint
             ? ''
             : 'border-accent bg-accent text-bg'
-          : 'border-line bg-bg-card text-ink-dim hover:text-ink',
+          : tint
+            ? ''
+            : 'border-line bg-bg-card text-ink-dim hover:text-ink',
       )}
       style={
-        active && tint
-          ? {
-              borderColor: tint,
-              background: 'color-mix(in oklab, currentColor 18%, transparent)',
-              color: tint,
-            }
+        tint
+          ? active
+            ? {
+                borderColor: tint,
+                background: tint,
+                color: inkOnTeamColor(color),
+              }
+            : {
+                borderColor: `color-mix(in oklab, ${tint} 35%, var(--line))`,
+                background: `color-mix(in oklab, ${tint} 8%, var(--bg-card))`,
+                color: inactiveFg,
+              }
           : undefined
       }
     >

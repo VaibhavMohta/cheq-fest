@@ -8,7 +8,7 @@ import { EventBar } from '@/components/shared/EventBar';
 import { useActiveEvent } from '@/lib/activeEvent';
 import { useAllEventPlayers } from '@/lib/playerDirectory';
 import { rostersCol, sportsCol, teamsCol, type RosterDoc } from '@/lib/db';
-import { colorVarFor } from '@/types/team';
+import { colorVarFor, inkOnTeamColor, isLightTeamColor, teamTextOnPage } from '@/types/team';
 import type { SportDoc } from '@/types/sport';
 import type { TeamDoc } from '@/types/player';
 
@@ -172,15 +172,24 @@ function FilterPill({
   onClick: () => void;
 }) {
   const accent = color ? colorVarFor(color) : 'var(--accent)';
+  // Active state fills with the team color so identity is unmistakable;
+  // text uses ink-on-team so dark teams (black/navy/slate) and light
+  // teams (yellow/lime/white) are both legible. Inactive state stays
+  // subdued — a faint tinted card with the team color as accent text,
+  // but dark teams fall back to ink so the chip is readable on the
+  // dark page bg.
+  const inactiveFg = color && !isLightTeamColor(color) ? 'var(--ink)' : accent;
   return (
     <button
       type="button"
       onClick={onClick}
-      className="shrink-0 rounded-full border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] transition"
+      className="shrink-0 rounded-full border px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.06em] transition"
       style={{
-        borderColor: active ? accent : 'var(--line)',
-        background: active ? `color-mix(in oklab, ${accent} 18%, transparent)` : 'var(--bg-card)',
-        color: active ? accent : 'var(--ink-dim)',
+        borderColor: active ? accent : 'color-mix(in oklab, ' + accent + ' 35%, var(--line))',
+        background: active
+          ? accent
+          : `color-mix(in oklab, ${accent} 8%, var(--bg-card))`,
+        color: active ? inkOnTeamColor(color) : color ? inactiveFg : 'var(--ink-dim)',
       }}
     >
       {label}
@@ -224,7 +233,12 @@ function TeamRosterBlock({
           style={{ background: teamColor }}
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate font-display text-lg uppercase">{team.name}</p>
+          <p
+            className="truncate font-display text-lg uppercase"
+            style={{ color: teamTextOnPage(team.color) }}
+          >
+            {team.name}
+          </p>
           {team.groupCaptainEmail && (
             <p className="truncate font-mono text-[9px] uppercase tracking-[0.08em] text-ink-dim">
               GC ·{' '}

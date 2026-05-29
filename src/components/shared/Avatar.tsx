@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { colorVarFor, type TeamId } from '@/types/team';
+import { colorVarFor, inkOnTeamColor, type TeamId } from '@/types/team';
 import { initialsFromName } from '@/lib/initials';
 import { CaptainBadge } from './CaptainBadge';
 
@@ -70,7 +70,7 @@ export function Avatar({
             className="grid h-full w-full place-items-center font-display"
             style={{
               fontSize,
-              color: teamId ? '#000' : 'var(--accent-2)',
+              color: teamId ? inkOnTeamColor(teamId) : 'var(--accent-2)',
               letterSpacing: '0.02em',
             }}
           >
