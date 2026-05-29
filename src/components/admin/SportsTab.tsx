@@ -1013,6 +1013,30 @@ function BracketEditor({
     },
   });
 
+  // Apply a tree template: replace the downstream bracket array with
+  // empty-but-named stages. Stage 0 (the group stage from tc.groups)
+  // stays untouched — admin uses the legacy editor above to pick
+  // groups + teams for that. After applying, admin still configures
+  // per-stage groups + slot sources.
+  const applyTemplate = (tpl: TreeTemplate) => {
+    if (
+      bracket.length > 0 &&
+      !window.confirm(
+        `Replace the current ${bracket.length}-stage bracket with the "${tpl.label}" template?`,
+      )
+    ) {
+      return;
+    }
+    setBracket(
+      tpl.stages.map((s, i) => ({
+        id: s.id,
+        label: s.label,
+        order: i + 1, // stage 0 = group
+        groups: [],
+      })),
+    );
+  };
+
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-line bg-bg p-3">
       <header className="flex items-center justify-between gap-2">
@@ -1028,16 +1052,43 @@ function BracketEditor({
           + Add stage
         </Button>
       </header>
+
+      {/* Tree-template shortcuts. One tap stamps the downstream
+          stages with their canonical names; admin then fills groups
+          + slot sources per stage. */}
+      <div className="flex flex-col gap-1.5 rounded-xl border border-dashed border-line bg-bg-card p-2">
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent-3">
+          Tree templates
+        </p>
+        <p className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+          One-tap setup. Pick the shape of your tournament — admin
+          still configures groups + advance counts per stage below.
+        </p>
+        <div className="-mx-1 flex flex-wrap gap-1.5 px-1">
+          {TREE_TEMPLATES.map((tpl) => (
+            <button
+              key={tpl.id}
+              type="button"
+              onClick={() => applyTemplate(tpl)}
+              title={tpl.hint}
+              className="rounded-full border border-line bg-bg px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-dim transition hover:border-accent hover:text-accent"
+            >
+              {tpl.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <p className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
-        Stage 1 is your Groups above. Add Stage 2+ to advance winners
-        into semifinals / finals. Generate matches per stage when
-        you're done editing.
+        Stage 1 is your Groups above (Qualifiers). Configure stages
+        below to advance winners into Quarterfinals / Semifinals /
+        Final. Generate matches per stage when you're done editing.
       </p>
 
       <ol className="flex flex-col gap-2">
         <li className="rounded-xl border border-dashed border-line px-3 py-2">
           <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-dim">
-            Stage 1 · {stage0.label}
+            Stage 1 · Qualifiers (Groups)
           </p>
           <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
             {stage0.groups.length === 0
@@ -1345,7 +1396,11 @@ function rankWord(n: number): string {
 }
 
 function nextStageId(used: Set<string>): string {
-  const candidates = ['qf', 'sf', 'f', 'r16', 'r32'];
+  // Order matches the natural flow of a tournament so a default
+  // "+ Add stage" tap picks the next missing piece (qualifiers
+  // before QF, QF before SF, etc.). The stage-0 'group' slot is
+  // synthesised from tc.groups and not counted here.
+  const candidates = ['qualifiers', 'r32', 'r16', 'qf', 'sf', 'f'];
   for (const c of candidates) if (!used.has(c)) return c;
   for (let i = 2; i < 99; i += 1) {
     const id = `s${i}`;
@@ -1356,6 +1411,8 @@ function nextStageId(used: Set<string>): string {
 
 function stageLabelFor(id: string): string {
   switch (id) {
+    case 'qualifiers':
+      return 'Qualifiers';
     case 'qf':
       return 'Quarterfinals';
     case 'sf':
@@ -1370,6 +1427,55 @@ function stageLabelFor(id: string): string {
       return id.toUpperCase();
   }
 }
+
+/** Pre-baked tree templates for the most common tournament shapes.
+ *  Each template returns an ordered list of BracketStage definitions
+ *  (no groups inside; admin still picks teams/format/advance count
+ *  per stage). Used by the BracketEditor's "Tree templates" row. */
+type TreeTemplate = {
+  id: string;
+  label: string;
+  hint: string;
+  stages: { id: string; label: string }[];
+};
+
+const TREE_TEMPLATES: TreeTemplate[] = [
+  {
+    id: 'qsf',
+    label: 'Qualifiers → SF → F',
+    hint: 'Three-stage: cut down to the semifinalists, then the final.',
+    stages: [
+      { id: 'qualifiers', label: 'Qualifiers' },
+      { id: 'sf', label: 'Semifinals' },
+      { id: 'f', label: 'Final' },
+    ],
+  },
+  {
+    id: 'qfsff',
+    label: 'QF → SF → F',
+    hint: 'Classic 8-team knockout: quarterfinals, semis, final.',
+    stages: [
+      { id: 'qf', label: 'Quarterfinals' },
+      { id: 'sf', label: 'Semifinals' },
+      { id: 'f', label: 'Final' },
+    ],
+  },
+  {
+    id: 'sff',
+    label: 'SF → F',
+    hint: 'Four-team knockout: semis straight into the final.',
+    stages: [
+      { id: 'sf', label: 'Semifinals' },
+      { id: 'f', label: 'Final' },
+    ],
+  },
+  {
+    id: 'fonly',
+    label: 'Just Final',
+    hint: 'Single decider — winners of the group stage go straight to the final.',
+    stages: [{ id: 'f', label: 'Final' }],
+  },
+];
 
 function nextBracketGroupId(stageId: string, used: Set<string>): string {
   // QF1, QF2, … for knockouts; A, B, … fallback.
