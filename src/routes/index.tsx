@@ -88,16 +88,15 @@ function HomeScreen() {
       <main className="mx-auto max-w-[420px] pb-28">
         <InstallPrompt />
 
-        {/* Board lives at the top so the leaderboard is the first
-            thing every visitor sees on Home. Full team list (not just
-            top 3); 'FULL BOARD →' jumps to /leaderboard for sport /
-            group filters + bonus award breakdown. */}
+        {/* Hero stays on top so the active event identity is the
+            first thing every visitor sees. Standings sits directly
+            beneath. */}
+        <Hero />
+
         <SectionTitle trailing={<Link to="/leaderboard">FULL BOARD →</Link>}>
           Standings
         </SectionTitle>
         <Standings teams={teams} limit={null} />
-
-        <Hero />
 
         <SectionTitle>Live Now</SectionTitle>
         {live.length === 0 ? (
@@ -266,7 +265,7 @@ function Hero() {
 
   return (
     <section
-      className="mx-5 mt-2 overflow-hidden rounded-[28px] border border-line p-6"
+      className="mx-5 mt-2 flex flex-col items-center overflow-hidden rounded-[28px] border border-line p-6 text-center"
       style={{
         background:
           'radial-gradient(ellipse at top right, color-mix(in oklab, var(--accent-2) 15%, transparent), transparent 50%), linear-gradient(135deg, #1a1815, #0f0e0c)',
@@ -287,7 +286,7 @@ function Hero() {
       <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-dim">
         {dateLine} · {event?.venue || 'Venue TBA'}
       </p>
-      <div className="mt-5 flex gap-6">
+      <div className="mt-5 flex justify-center gap-6">
         <Stat
           value={sportCount === null ? '—' : String(sportCount)}
           label="Sports"
@@ -625,7 +624,7 @@ function TeamLine({
 
 function Stat({ value, label }: { value: string; label: string }) {
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col items-center text-center">
       <span className="font-display text-3xl leading-none text-ink">{value}</span>
       <span className="mt-1 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-dim">
         {label}
