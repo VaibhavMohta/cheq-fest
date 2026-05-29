@@ -22,6 +22,15 @@ export const Route = createFileRoute('/profile')({
 function ProfileScreen() {
   const authState = useAuth();
   const role = useRole();
+  // Hooks must run in the same order on every render — compute the
+  // email used by usePlayerStats up front so it's safe to call before
+  // the loading / signedOut early returns below. usePlayerStats short-
+  // circuits when email is null.
+  const userEmail =
+    authState.status === 'signedIn'
+      ? authState.user.email?.toLowerCase() ?? null
+      : null;
+  const stats = usePlayerStats(userEmail);
 
   if (authState.status === 'loading') {
     return (
@@ -56,8 +65,6 @@ function ProfileScreen() {
 
   const { user } = authState;
   const isRef = role.perMatchReferee.length > 0;
-  const userEmail = user.email?.toLowerCase() ?? null;
-  const stats = usePlayerStats(userEmail);
 
   return (
     <>
