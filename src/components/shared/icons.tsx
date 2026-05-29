@@ -92,6 +92,18 @@ export function MenuIcon(p: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Calendar — the public "Matches" tab icon. */
+export function MatchesIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 9h18" />
+      <path d="M8 3v4M16 3v4" />
+      <path d="M8 13h2M14 13h2M8 17h2M14 17h2" />
+    </svg>
+  );
+}
+
 /** Whistle — the public "Referee" tab icon. */
 export function RefereeIcon(p: SVGProps<SVGSVGElement>) {
   return (
