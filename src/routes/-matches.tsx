@@ -309,23 +309,23 @@ function MatchRow({
   const winnerB = variant === 'ended' && match.winnerTeamId === match.teamBId;
   const isDraw = variant === 'ended' && match.winnerTeamId === null;
 
-  // Ended-match split tint: winner half (green) + loser half (red),
-  // applied across the full content column so the row reads at a
-  // glance which side won. Draws stay neutral — no tint. Mix
-  // percentage tuned low (14%) so the team-color dots and bold
-  // winner text still pop on top.
-  const WIN = '#16a34a';
-  const LOSE = '#e63946';
+  // Ended-match split tint: winner half (soft green) + loser half
+  // (soft red), applied across the full content column so the row
+  // reads at a glance which side won. Draws stay neutral — no tint.
+  // Mix percentage kept low (10%) so the surface stays calm and
+  // text on top can be near-white for max legibility.
+  const WIN = '#22c55e'; // brighter green than #16a34a, mixes lighter
+  const LOSE = '#f87171'; // soft coral red instead of #e63946
   const tintLeft = winnerA ? WIN : winnerB ? LOSE : null;
   const tintRight = winnerA ? LOSE : winnerB ? WIN : null;
   const endedStyle =
     tintLeft && tintRight
       ? {
           background: `linear-gradient(to right,
-            color-mix(in oklab, ${tintLeft} 18%, transparent) 0%,
-            color-mix(in oklab, ${tintLeft} 18%, transparent) 50%,
-            color-mix(in oklab, ${tintRight} 18%, transparent) 50%,
-            color-mix(in oklab, ${tintRight} 18%, transparent) 100%)`,
+            color-mix(in oklab, ${tintLeft} 10%, transparent) 0%,
+            color-mix(in oklab, ${tintLeft} 10%, transparent) 50%,
+            color-mix(in oklab, ${tintRight} 10%, transparent) 50%,
+            color-mix(in oklab, ${tintRight} 10%, transparent) 100%)`,
         }
       : undefined;
 
@@ -381,6 +381,7 @@ function MatchRow({
             color={teamA?.color}
             score={showScore ? match.state.scoreA : null}
             isWinner={winnerA}
+            forceInk={variant === 'ended'}
           />
           <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
             vs
@@ -391,6 +392,7 @@ function MatchRow({
             score={showScore ? match.state.scoreB : null}
             isWinner={winnerB}
             align="right"
+            forceInk={variant === 'ended'}
           />
         </div>
 
@@ -618,13 +620,24 @@ function TeamLine({
   score,
   isWinner,
   align = 'left',
+  forceInk = false,
 }: {
   name: string;
   color: string | undefined;
   score: number | null;
   isWinner: boolean;
   align?: 'left' | 'right';
+  /** Override team-coloured text with bright off-white. Used on
+   *  ended-match rows where the row's green/red split tint can mute
+   *  the team-coloured name. The team-color dot still carries
+   *  identity. */
+  forceInk?: boolean;
 }) {
+  const nameColor = forceInk
+    ? 'var(--ink)'
+    : color
+      ? teamTextOnPage(color)
+      : 'var(--ink-dim)';
   return (
     <div
       className={`flex flex-1 items-center gap-2 ${align === 'right' ? 'justify-end' : ''}`}
@@ -637,7 +650,7 @@ function TeamLine({
       <span
         className="truncate font-display text-sm uppercase"
         style={{
-          color: color ? teamTextOnPage(color) : 'var(--ink-dim)',
+          color: nameColor,
           fontWeight: isWinner ? 800 : 500,
         }}
       >
