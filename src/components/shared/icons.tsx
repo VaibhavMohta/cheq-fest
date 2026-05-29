@@ -91,3 +91,14 @@ export function MenuIcon(p: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+/** Whistle — the public "Referee" tab icon. */
+export function RefereeIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <circle cx="9" cy="14" r="5" />
+      <path d="M14 11l6-2 2 3-7 2" />
+      <circle cx="9" cy="14" r="1.4" fill="currentColor" />
+    </svg>
+  );
+}

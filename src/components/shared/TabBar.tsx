@@ -7,6 +7,7 @@ import {
   LeaderboardIcon,
   PlayersIcon,
   ProfileIcon,
+  RefereeIcon,
   RostersIcon,
   RulebookIcon,
 } from './icons';
@@ -23,6 +24,7 @@ const ITEMS: readonly Item[] = [
   { to: '/leaderboard', label: 'Board', Icon: LeaderboardIcon },
   { to: '/players', label: 'Players', Icon: PlayersIcon },
   { to: '/rosters', label: 'Rosters', Icon: RostersIcon },
+  { to: '/referee', label: 'Ref', Icon: RefereeIcon },
   { to: '/rulebook', label: 'Rules', Icon: RulebookIcon },
   { to: '/profile', label: 'Me', Icon: ProfileIcon },
 ];
@@ -31,7 +33,7 @@ export function TabBar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
     <nav
-      className="fixed inset-x-3 bottom-3 z-50 grid grid-cols-7 gap-1 rounded-3xl border border-line p-2"
+      className="fixed inset-x-3 bottom-3 z-50 grid grid-cols-8 gap-0.5 rounded-3xl border border-line p-1.5"
       style={{
         background: 'color-mix(in oklab, var(--bg-card) 92%, transparent)',
         backdropFilter: 'blur(20px)',
@@ -45,7 +47,7 @@ export function TabBar() {
             key={to}
             to={to}
             className={clsx(
-              'flex flex-col items-center gap-1 rounded-2xl px-1 py-2.5 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] transition',
+              'flex flex-col items-center gap-0.5 rounded-2xl px-0 py-2 font-mono text-[8px] font-semibold uppercase tracking-[0.03em] transition',
               active ? 'text-accent' : 'text-ink-dim',
             )}
             style={
@@ -54,7 +56,7 @@ export function TabBar() {
                 : undefined
             }
           >
-            <Icon width={20} height={20} />
+            <Icon width={16} height={16} />
             {label}
           </Link>
         );

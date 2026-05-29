@@ -132,8 +132,14 @@ export default function RefereeScreen() {
             scheduledStart: data.scheduledStart ?? null,
           };
         });
-        // Ascending by scheduledStart; unscheduled go to the tail.
+        // Sort by status group (Live first, then Scheduled, then
+        // Ended), then by scheduledStart ascending within each group.
+        // Unscheduled rows go to the tail of their group.
+        const statusRank = (s: SwitcherMatch['status']): number =>
+          s === 'live' ? 0 : s === 'scheduled' ? 1 : 2;
         rows.sort((x, y) => {
+          const sd = statusRank(x.status) - statusRank(y.status);
+          if (sd !== 0) return sd;
           const xt = x.scheduledStart?.toMillis() ?? Number.POSITIVE_INFINITY;
           const yt = y.scheduledStart?.toMillis() ?? Number.POSITIVE_INFINITY;
           return xt - yt;
