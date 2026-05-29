@@ -7,6 +7,7 @@ import {
   LeaderboardIcon,
   PlayersIcon,
   ProfileIcon,
+  RostersIcon,
   RulebookIcon,
 } from './icons';
 
@@ -21,6 +22,7 @@ const ITEMS: readonly Item[] = [
   { to: '/arena', label: 'Arena', Icon: ArenaIcon },
   { to: '/leaderboard', label: 'Board', Icon: LeaderboardIcon },
   { to: '/players', label: 'Players', Icon: PlayersIcon },
+  { to: '/rosters', label: 'Rosters', Icon: RostersIcon },
   { to: '/rulebook', label: 'Rules', Icon: RulebookIcon },
   { to: '/profile', label: 'Me', Icon: ProfileIcon },
 ];
@@ -29,7 +31,7 @@ export function TabBar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
     <nav
-      className="fixed inset-x-3 bottom-3 z-50 grid grid-cols-6 gap-1 rounded-3xl border border-line p-2"
+      className="fixed inset-x-3 bottom-3 z-50 grid grid-cols-7 gap-1 rounded-3xl border border-line p-2"
       style={{
         background: 'color-mix(in oklab, var(--bg-card) 92%, transparent)',
         backdropFilter: 'blur(20px)',

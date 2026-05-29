@@ -55,6 +55,16 @@ export function ProfileIcon(p: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function RostersIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...p}>
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 4v-1h6v1" />
+      <path d="M9 10h6M9 14h6M9 18h4" />
+    </svg>
+  );
+}
+
 export function PlayersIcon(p: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...p}>
