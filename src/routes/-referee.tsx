@@ -280,13 +280,11 @@ function RefereePanel({
 
   // End / reopen mutations (declared before any early return to keep
   // React's hook order stable across renders).
+  // endMatch takes an explicit winner so the referee can override the
+  // auto-detected result before stopping the clock.
   const endMatch = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (winnerTeamId: string | null) => {
       if (!match) throw new Error('Match not loaded yet.');
-      const a = match.state.scoreA;
-      const b = match.state.scoreB;
-      const winnerTeamId =
-        a > b ? match.teamAId : b > a ? match.teamBId : null;
       await setDoc(
         matchRef(eventId, matchId),
         {
@@ -295,6 +293,22 @@ function RefereePanel({
           endedAt: serverTimestamp(),
           state: { ...match.state, isRunning: false },
         },
+        { merge: true },
+      );
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['referee'] });
+    },
+  });
+
+  // Admin-only: change the winner on a final match without reopening.
+  // The cloud-function awardPoints engine detects the winnerTeamId
+  // change and applies the points delta to both teams' totalPoints.
+  const changeWinner = useMutation({
+    mutationFn: async (winnerTeamId: string | null) => {
+      await setDoc(
+        matchRef(eventId, matchId),
+        { winnerTeamId },
         { merge: true },
       );
     },
@@ -430,89 +444,248 @@ function RefereePanel({
         onUndo={(id) => void undo(id)}
       />
 
-      {/* Match-end controls. Pre-final: an End Match button referees
-          tap to stop the match. Post-final: a status pill and (admin
-          only) a "Reopen scoring" button to flip status back to live
-          for corrections beyond simple score nudges. */}
-      <div className="mx-5 mt-4 flex flex-col gap-2">
-        {!matchFinal ? (
-          <>
-            <Button
+      {/* Match-end controls. Pre-final: result picker (auto-detected
+          from score, referee can override) + End Match button.
+          Post-final: status pill, admin can change winner directly
+          (cloud function handles the points delta), or fully reopen
+          scoring for bigger corrections. */}
+      <ResultPanel
+        matchFinal={matchFinal}
+        teamAId={match.teamAId}
+        teamBId={match.teamBId}
+        teamAName={a.name}
+        teamBName={b.name}
+        scoreA={match.state.scoreA}
+        scoreB={match.state.scoreB}
+        currentWinner={match.winnerTeamId}
+        isAdmin={isAdmin}
+        endPending={endMatch.isPending}
+        changePending={changeWinner.isPending}
+        reopenPending={reopenMatch.isPending}
+        onEnd={(winnerTeamId) => endMatch.mutate(winnerTeamId)}
+        onChangeWinner={(winnerTeamId) => changeWinner.mutate(winnerTeamId)}
+        onReopen={() => reopenMatch.mutate()}
+      />
+      {(endMatch.error || changeWinner.error || reopenMatch.error) && (
+        <p className="mx-5 mt-2 font-mono text-[10px] uppercase tracking-[0.06em] text-accent">
+          {String(endMatch.error ?? changeWinner.error ?? reopenMatch.error)}
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
+ * Match-end / winner picker. Pre-final: lets the referee pick a winner
+ * (defaulted to whatever the score suggests) and end the match.
+ * Post-final: shows the recorded winner and, for admins, lets them
+ * change it (delta is handled by the awardPoints Cloud Function) or
+ * fully reopen the match for bigger corrections.
+ */
+function ResultPanel({
+  matchFinal,
+  teamAId,
+  teamBId,
+  teamAName,
+  teamBName,
+  scoreA,
+  scoreB,
+  currentWinner,
+  isAdmin,
+  endPending,
+  changePending,
+  reopenPending,
+  onEnd,
+  onChangeWinner,
+  onReopen,
+}: {
+  matchFinal: boolean;
+  teamAId: string;
+  teamBId: string;
+  teamAName: string;
+  teamBName: string;
+  scoreA: number;
+  scoreB: number;
+  currentWinner: string | null;
+  isAdmin: boolean;
+  endPending: boolean;
+  changePending: boolean;
+  reopenPending: boolean;
+  onEnd: (winnerTeamId: string | null) => void;
+  onChangeWinner: (winnerTeamId: string | null) => void;
+  onReopen: () => void;
+}) {
+  // Auto-detected result from the live scoreboard.
+  const auto: string | null =
+    scoreA > scoreB ? teamAId : scoreB > scoreA ? teamBId : null;
+
+  // Selected winner — defaults to the post-final stored value (after
+  // the match ends) or the auto-detected result while live.
+  const [selected, setSelected] = useState<string | null>(
+    matchFinal ? currentWinner : auto,
+  );
+
+  // Keep the selection in sync when the underlying data changes (e.g.
+  // referee nudged the score, or admin reopened the match). The
+  // pre-final default tracks auto; post-final default tracks the
+  // stored winner.
+  useEffect(() => {
+    setSelected(matchFinal ? currentWinner : auto);
+    // Intentionally not depending on `selected` — we only re-sync when
+    // the upstream truth changes, not when the user picks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchFinal, currentWinner, auto]);
+
+  const options: { id: string | null; label: string; sub?: string }[] = [
+    { id: teamAId, label: teamAName, sub: `${scoreA}` },
+    { id: null, label: 'Draw' },
+    { id: teamBId, label: teamBName, sub: `${scoreB}` },
+  ];
+
+  const overrideHint =
+    !matchFinal && selected !== auto
+      ? 'Manual override · differs from the scoreboard result.'
+      : null;
+
+  // Post-final, non-admins read the result but can't change it.
+  const canEdit = !matchFinal || isAdmin;
+
+  return (
+    <div className="mx-5 mt-4 flex flex-col gap-2">
+      <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
+        Result
+      </p>
+      <div className="grid grid-cols-3 gap-1.5">
+        {options.map((opt) => {
+          const active = selected === opt.id;
+          return (
+            <button
+              key={opt.id ?? 'draw'}
               type="button"
-              variant="ghost"
-              disabled={endMatch.isPending}
-              onClick={() => {
-                const sa = match.state.scoreA;
-                const sb = match.state.scoreB;
-                const winner =
-                  sa > sb ? a.name : sb > sa ? b.name : 'a draw';
-                const msg =
-                  `End this match now?\n\n` +
-                  `Final score: ${a.name} ${sa} — ${sb} ${b.name}\n` +
-                  `Result: ${winner === 'a draw' ? 'Draw' : `${winner} wins`}\n\n` +
-                  `Status flips to FINAL and the points engine awards team points. ` +
-                  `You can still tap +/- on the scoreboard to correct after stopping.`;
-                if (window.confirm(msg)) endMatch.mutate();
-              }}
-              className="!w-full"
+              disabled={!canEdit}
+              onClick={() => canEdit && setSelected(opt.id)}
+              className="flex flex-col items-center gap-0.5 rounded-xl border px-2 py-2 transition active:scale-[0.99]"
               style={{
-                borderColor: 'color-mix(in oklab, var(--accent) 60%, transparent)',
-                color: 'var(--accent)',
+                borderColor: active ? 'var(--accent)' : 'var(--line)',
+                background: active
+                  ? 'color-mix(in oklab, var(--accent) 12%, transparent)'
+                  : 'var(--bg-card)',
+                color: active ? 'var(--accent)' : 'var(--ink)',
+                cursor: canEdit ? 'pointer' : 'default',
+                opacity: canEdit ? 1 : 0.85,
               }}
             >
-              {endMatch.isPending ? 'Ending…' : 'End Match'}
-            </Button>
-            <p className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
-              Referee action — locks the clock and punch grid; +/-
-              scoreboard stays editable for corrections.
-            </p>
-          </>
-        ) : (
-          <>
-            <div
-              className="rounded-xl border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em]"
-              style={{
-                color: 'var(--accent-2)',
-                borderColor: 'color-mix(in oklab, var(--accent-2) 40%, transparent)',
-              }}
-            >
-              Ended · {a.name} {match.state.scoreA} — {match.state.scoreB} {b.name}
-              {match.winnerTeamId &&
-                ` · ${(match.winnerTeamId === match.teamAId ? a.name : b.name)} wins`}
-              {!match.winnerTeamId && match.state.scoreA === match.state.scoreB && ' · Draw'}
-            </div>
-            <p className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
-              You can still tap +/- on the scoreboard above to adjust
-              the final score. Admins can also reopen the match if a
-              re-run is needed.
-            </p>
-            {isAdmin && (
+              <span className="truncate font-display text-xs uppercase">
+                {opt.label}
+              </span>
+              {opt.sub != null && (
+                <span className="font-mono text-[10px] tracking-[0.06em] text-ink-dim">
+                  {opt.sub}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {overrideHint && (
+        <p className="font-mono text-[9px] uppercase tracking-[0.06em] text-accent-3">
+          {overrideHint}
+        </p>
+      )}
+
+      {!matchFinal ? (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={endPending}
+            onClick={() => {
+              const label =
+                selected === null
+                  ? 'Draw'
+                  : `${selected === teamAId ? teamAName : teamBName} wins`;
+              const msg =
+                `End this match now?\n\n` +
+                `Final score: ${teamAName} ${scoreA} — ${scoreB} ${teamBName}\n` +
+                `Result: ${label}\n\n` +
+                `Status flips to FINAL and the points engine awards team points.`;
+              if (window.confirm(msg)) onEnd(selected);
+            }}
+            className="!w-full"
+            style={{
+              borderColor: 'color-mix(in oklab, var(--accent) 60%, transparent)',
+              color: 'var(--accent)',
+            }}
+          >
+            {endPending ? 'Ending…' : 'End Match'}
+          </Button>
+          <p className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+            Referee action — locks the clock and punch grid. +/- score
+            stays editable for corrections after stopping.
+          </p>
+        </>
+      ) : (
+        <>
+          <div
+            className="rounded-xl border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.08em]"
+            style={{
+              color: 'var(--accent-2)',
+              borderColor: 'color-mix(in oklab, var(--accent-2) 40%, transparent)',
+            }}
+          >
+            Ended · {teamAName} {scoreA} — {scoreB} {teamBName}
+            {currentWinner
+              ? ` · ${currentWinner === teamAId ? teamAName : teamBName} wins`
+              : ' · Draw'}
+          </div>
+          {isAdmin && (
+            <>
               <Button
                 type="button"
-                variant="ghost"
-                disabled={reopenMatch.isPending}
+                disabled={changePending || selected === currentWinner}
                 onClick={() => {
+                  const label =
+                    selected === null
+                      ? 'Draw'
+                      : `${selected === teamAId ? teamAName : teamBName} wins`;
                   if (
                     window.confirm(
-                      `Reopen this match for editing? Status returns to LIVE and the points engine will re-run on the next End Match.`,
+                      `Change the winner to "${label}"? The leaderboard will adjust automatically.`,
                     )
                   ) {
-                    reopenMatch.mutate();
+                    onChangeWinner(selected);
                   }
                 }}
                 className="!w-auto self-start !px-3 !py-1.5"
               >
-                {reopenMatch.isPending ? 'Reopening…' : 'Reopen scoring (admin)'}
+                {changePending ? 'Saving…' : 'Change winner (admin)'}
               </Button>
-            )}
-          </>
-        )}
-        {(endMatch.error || reopenMatch.error) && (
-          <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-accent">
-            {String(endMatch.error ?? reopenMatch.error)}
-          </p>
-        )}
-      </div>
-    </>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={reopenPending}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Reopen this match for editing? Status returns to LIVE and points will be re-awarded on the next End Match.`,
+                    )
+                  ) {
+                    onReopen();
+                  }
+                }}
+                className="!w-auto self-start !px-3 !py-1.5"
+              >
+                {reopenPending ? 'Reopening…' : 'Reopen scoring'}
+              </Button>
+            </>
+          )}
+          {!isAdmin && (
+            <p className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+              Ask an admin to change the winner or reopen scoring.
+            </p>
+          )}
+        </>
+      )}
+    </div>
   );
 }
