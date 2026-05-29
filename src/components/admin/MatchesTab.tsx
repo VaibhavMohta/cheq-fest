@@ -160,9 +160,11 @@ function MatchesTabInner({
       venue: string;
       group?: string | null;
       round?: string | null;
-      /** Optional per-match W/D/L override set on the form. Null /
-       *  undefined = use the per-round override or sport default. */
-      points?: { win: number; draw: number; loss: number } | null;
+      matchType?: 'round-robin' | 'knockout' | null;
+      /** Per-match W/D/L points. Always written (no opt-in); the
+       *  awardPoints engine adds these to each team's totalPoints
+       *  when the match finalises. */
+      points: { win: number; draw: number; loss: number };
     }) => {
       // Compute the next per-event match number = max(existing) + 1.
       // Falls back to count + 1 if all existing rows lack matchNumber
@@ -188,7 +190,8 @@ function MatchesTabInner({
         createdAt: serverTimestamp() as unknown as Timestamp,
         group: args.group ?? null,
         round: args.round ?? null,
-        points: args.points ?? null,
+        matchType: args.matchType ?? null,
+        points: args.points,
       });
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: matchesQk(eventId) }),
@@ -496,7 +499,8 @@ function CreateMatchForm({
     venue: string;
     group: string | null;
     round: string | null;
-    points: { win: number; draw: number; loss: number } | null;
+    matchType: 'round-robin' | 'knockout' | null;
+    points: { win: number; draw: number; loss: number };
   }) => void;
 }) {
   const [sportId, setSportId] = useState<string>('');
@@ -506,12 +510,12 @@ function CreateMatchForm({
   const [venue, setVenue] = useState<string>('');
   const [group, setGroup] = useState<string>(''); // '' = None
   const [round, setRound] = useState<string>(''); // '' = None
-  // Per-match point override. `enableOverride=false` → pass null and let
-  // the resolver fall through to per-round / sport defaults.
-  const [enableOverride, setEnableOverride] = useState(false);
-  const [pointsWin, setPointsWin] = useState('50');
+  const [matchType, setMatchType] = useState<'' | 'round-robin' | 'knockout'>('');
+  // Always-visible per-match points. Default 0 so admin doesn't have
+  // to think about it for low-stakes matches; clamped to >= 0.
+  const [pointsWin, setPointsWin] = useState('0');
   const [pointsDraw, setPointsDraw] = useState('0');
-  const [pointsLoss, setPointsLoss] = useState('30');
+  const [pointsLoss, setPointsLoss] = useState('0');
   const [error, setError] = useState<string | null>(null);
   // Reset group/round if the picked sport has no tournament config for
   // them — otherwise stale state from a previous pick would persist.
@@ -640,57 +644,62 @@ function CreateMatchForm({
           </FormField>
         </div>
       )}
-      <FormField label="Venue">
-        <TextInput value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="Ground A" />
-      </FormField>
+      <div className="grid grid-cols-2 gap-2">
+        <FormField label="Venue">
+          <TextInput value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="Ground A" />
+        </FormField>
+        <FormField label="Match type" hint="Tag this match as a knockout or round-robin fixture.">
+          <select
+            value={matchType}
+            onChange={(e) => setMatchType(e.target.value as '' | 'round-robin' | 'knockout')}
+            className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm uppercase focus:border-accent focus:outline-none"
+          >
+            <option value="">Unspecified</option>
+            <option value="round-robin">Round-robin</option>
+            <option value="knockout">Knockout</option>
+          </select>
+        </FormField>
+      </div>
 
-      {/* Per-match point override. Off by default — admin opts in for
-          high-value matches (e.g. finals). When off, the resolver falls
-          through to the per-round override or the sport default. */}
+      {/* Per-match points — always on. Defaults to 0 across the board
+          so a low-stakes match just adds 0 to either team. Win / Draw /
+          Loss values are added to the respective team's leaderboard
+          total once the match finalises. Negatives are rejected on
+          submit; the inputs themselves use min=0. */}
       <div className="rounded-xl border border-line bg-bg-card p-3">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={enableOverride}
-            onChange={(e) => setEnableOverride(e.target.checked)}
-            className="h-4 w-4 accent-current"
-            style={{ accentColor: 'var(--accent)' }}
-          />
-          <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
-            Override points for this match
-          </span>
-        </label>
-        {enableOverride && (
-          <>
-            <p className="mt-2 font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
-              These values supersede the sport default and any per-round
-              override. E.g. Win 50 / Loss 30 for the Final.
-            </p>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              <FormField label="Win">
-                <TextInput
-                  type="number"
-                  value={pointsWin}
-                  onChange={(e) => setPointsWin(e.target.value)}
-                />
-              </FormField>
-              <FormField label="Draw">
-                <TextInput
-                  type="number"
-                  value={pointsDraw}
-                  onChange={(e) => setPointsDraw(e.target.value)}
-                />
-              </FormField>
-              <FormField label="Loss">
-                <TextInput
-                  type="number"
-                  value={pointsLoss}
-                  onChange={(e) => setPointsLoss(e.target.value)}
-                />
-              </FormField>
-            </div>
-          </>
-        )}
+        <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
+          Points awarded
+        </p>
+        <p className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+          Added to the leaderboard once this match ends. 0 = no points
+          for that result. Cannot be negative.
+        </p>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          <FormField label="Win">
+            <TextInput
+              type="number"
+              min={0}
+              value={pointsWin}
+              onChange={(e) => setPointsWin(e.target.value)}
+            />
+          </FormField>
+          <FormField label="Draw">
+            <TextInput
+              type="number"
+              min={0}
+              value={pointsDraw}
+              onChange={(e) => setPointsDraw(e.target.value)}
+            />
+          </FormField>
+          <FormField label="Loss">
+            <TextInput
+              type="number"
+              min={0}
+              value={pointsLoss}
+              onChange={(e) => setPointsLoss(e.target.value)}
+            />
+          </FormField>
+        </div>
       </div>
 
       {error && <p className="font-mono text-[10px] text-accent">{error}</p>}
@@ -718,17 +727,15 @@ function CreateMatchForm({
               return;
             }
           }
-          // Validate per-match override numbers if it's enabled.
-          let pointsOverride: { win: number; draw: number; loss: number } | null = null;
-          if (enableOverride) {
-            const w = Number(pointsWin);
-            const d = Number(pointsDraw);
-            const l = Number(pointsLoss);
-            if (![w, d, l].every((n) => Number.isFinite(n))) {
-              setError('Match points must all be numbers.');
-              return;
-            }
-            pointsOverride = { win: Math.trunc(w), draw: Math.trunc(d), loss: Math.trunc(l) };
+          // Validate the always-on points fields. Empty / non-numeric
+          // / negative all fail; the inputs use min=0 to nudge users
+          // toward valid values but we still defend at submit time.
+          const w = Number(pointsWin);
+          const d = Number(pointsDraw);
+          const l = Number(pointsLoss);
+          if (![w, d, l].every((n) => Number.isFinite(n) && n >= 0)) {
+            setError('Points must be 0 or higher.');
+            return;
           }
           setError(null);
           const startTs = scheduled ? Timestamp.fromDate(scheduled) : null;
@@ -740,14 +747,16 @@ function CreateMatchForm({
             venue,
             group: group || null,
             round: round || null,
-            points: pointsOverride,
+            matchType: matchType || null,
+            points: { win: Math.trunc(w), draw: Math.trunc(d), loss: Math.trunc(l) },
           });
-          // Reset only the variable bits.
+          // Reset only the variable bits — keep sport/teams/points so
+          // admin can quickly add a second match in the same series.
           setScheduled(null);
           setVenue('');
           setGroup('');
           setRound('');
-          setEnableOverride(false);
+          setMatchType('');
         }}
       >
         {pending ? 'Creating…' : 'Create Match'}
@@ -1089,6 +1098,8 @@ function MatchRow({
             )}
           </p>
 
+          <EditMatchForm data={data} sport={sport} teams={teams} onPatch={onPatch} />
+
           {/* Bracket teams override. Visible for any match — useful for
               downstream bracket matches that still hold a placeholder
               slot OR for fixing a mis-resolved auto-advance. Picking a
@@ -1291,6 +1302,205 @@ function AdminTeamLine({
         <span className="font-display text-[14px] text-accent-2">{score}</span>
       )}
     </span>
+  );
+}
+
+/**
+ * Inline edit form for an existing match. Lets admin change time,
+ * venue, group, round, match type, and per-match points after the
+ * match has been created. Sport + teams stay on the dedicated
+ * override / change paths above (admins rarely want to repurpose a
+ * match doc to a different sport).
+ *
+ * Each field has its own Save line — admins can edit one piece at a
+ * time without committing the whole form. The "Save changes" button
+ * at the bottom commits everything that's been touched at once.
+ */
+function EditMatchForm({
+  data,
+  sport,
+  onPatch,
+}: {
+  data: MatchDoc;
+  sport: { id: string; name: string; tournament?: TournamentConfig | null } | null;
+  teams: TeamOption[];
+  onPatch: (patch: Partial<MatchDoc>) => void;
+}) {
+  const initialScheduled = data.scheduledStart?.toDate() ?? null;
+  const [scheduled, setScheduled] = useState<Date | null>(initialScheduled);
+  const [venue, setVenue] = useState<string>(data.venue ?? '');
+  const [group, setGroup] = useState<string>(data.group ?? '');
+  const [round, setRound] = useState<string>(data.round ?? '');
+  const [matchType, setMatchType] = useState<'' | 'round-robin' | 'knockout'>(
+    (data.matchType as 'round-robin' | 'knockout' | null | undefined) ?? '',
+  );
+  const [pointsWin, setPointsWin] = useState<string>(
+    String(data.points?.win ?? 0),
+  );
+  const [pointsDraw, setPointsDraw] = useState<string>(
+    String(data.points?.draw ?? 0),
+  );
+  const [pointsLoss, setPointsLoss] = useState<string>(
+    String(data.points?.loss ?? 0),
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const availableGroups = sport?.tournament?.groups ?? [];
+  const availableRounds = sport?.tournament?.rounds ?? [];
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-line bg-bg-card p-3">
+      <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-dim">
+        Edit match
+      </p>
+
+      <div className="grid grid-cols-2 gap-2">
+        <FormField label="Scheduled">
+          <DateTimePicker
+            value={scheduled}
+            onChange={(d) => setScheduled(d)}
+            placeholder="dd-mm-yyyy --:--"
+          />
+        </FormField>
+        <FormField label="Venue">
+          <TextInput
+            value={venue}
+            onChange={(e) => setVenue(e.target.value)}
+            placeholder="Ground A"
+          />
+        </FormField>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <FormField label="Group">
+          <select
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
+            className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm uppercase focus:border-accent focus:outline-none"
+          >
+            <option value="">None</option>
+            {availableGroups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+            {/* Preserve a legacy/manual value that doesn't match any
+                current group option so admins don't silently drop it. */}
+            {group && !availableGroups.some((g) => g.id === group) && (
+              <option value={group}>{group}</option>
+            )}
+          </select>
+        </FormField>
+        <FormField label="Round">
+          <select
+            value={round}
+            onChange={(e) => setRound(e.target.value)}
+            className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm uppercase focus:border-accent focus:outline-none"
+          >
+            <option value="">None</option>
+            {availableRounds.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+            {round && !availableRounds.includes(round) && (
+              <option value={round}>{round}</option>
+            )}
+          </select>
+        </FormField>
+      </div>
+
+      <FormField label="Match type">
+        <select
+          value={matchType}
+          onChange={(e) =>
+            setMatchType(e.target.value as '' | 'round-robin' | 'knockout')
+          }
+          className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-sm uppercase focus:border-accent focus:outline-none"
+        >
+          <option value="">Unspecified</option>
+          <option value="round-robin">Round-robin</option>
+          <option value="knockout">Knockout</option>
+        </select>
+      </FormField>
+
+      <div className="rounded-xl border border-line bg-bg p-2">
+        <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-dim">
+          Points awarded
+        </p>
+        <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-ink-mute">
+          Added to the leaderboard once this match ends. 0 = no points.
+          Cannot be negative.
+        </p>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          <FormField label="Win">
+            <TextInput
+              type="number"
+              min={0}
+              value={pointsWin}
+              onChange={(e) => setPointsWin(e.target.value)}
+            />
+          </FormField>
+          <FormField label="Draw">
+            <TextInput
+              type="number"
+              min={0}
+              value={pointsDraw}
+              onChange={(e) => setPointsDraw(e.target.value)}
+            />
+          </FormField>
+          <FormField label="Loss">
+            <TextInput
+              type="number"
+              min={0}
+              value={pointsLoss}
+              onChange={(e) => setPointsLoss(e.target.value)}
+            />
+          </FormField>
+        </div>
+      </div>
+
+      {error && <p className="font-mono text-[10px] text-accent">{error}</p>}
+
+      <Button
+        type="button"
+        disabled={saving}
+        onClick={() => {
+          const w = Number(pointsWin);
+          const d = Number(pointsDraw);
+          const l = Number(pointsLoss);
+          if (![w, d, l].every((n) => Number.isFinite(n) && n >= 0)) {
+            setError('Points must be 0 or higher.');
+            return;
+          }
+          setError(null);
+          setSaving(true);
+          // Patch only the fields this form owns. Leave teams, sport,
+          // status, refereeUids, state, etc. untouched.
+          const patch: Partial<MatchDoc> = {
+            scheduledStart: scheduled ? Timestamp.fromDate(scheduled) : null,
+            venue,
+            group: group || null,
+            round: round || null,
+            matchType: matchType || null,
+            points: {
+              win: Math.trunc(w),
+              draw: Math.trunc(d),
+              loss: Math.trunc(l),
+            },
+          };
+          onPatch(patch);
+          // The mutation handler invalidates the query, which
+          // re-renders this row with fresh data; clear the local
+          // saving spinner after a short window.
+          window.setTimeout(() => setSaving(false), 400);
+        }}
+        className="!w-auto self-start !px-4 !py-2"
+      >
+        {saving ? 'Saving…' : 'Save changes'}
+      </Button>
+    </div>
   );
 }
 

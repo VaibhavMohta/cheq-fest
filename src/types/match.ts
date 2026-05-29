@@ -57,6 +57,10 @@ export type MatchDoc = {
    *  on the sport. */
   group: string | null;
   round: string | null;
+  /** Per-match format tag. Independent of the bracket so admins can
+   *  label one-off matches as knockout / round-robin even when the
+   *  sport has no full bracket configured. */
+  matchType?: 'round-robin' | 'knockout' | null;
   // ── Bracket linkage (all optional) ──────────────────────────────
   /** Stable bracket-stage id this match belongs to (e.g. 'group',
    *  'qf', 'sf', 'f'). Mirrors the bracket model on the sport doc. */
