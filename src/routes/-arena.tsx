@@ -230,6 +230,14 @@ function ArenaForMatch({
     return m;
   }, [people]);
 
+  // uid → name lookup so the referee line can render assigned-ref names
+  // (refereeUids stores Firebase Auth uids, not emails).
+  const peopleByUid = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of people) if (p.uid) m.set(p.uid, p.name);
+    return m;
+  }, [people]);
+
   // End-match mutation must be declared before any early return so the
   // hooks order stays stable across renders. It captures `match` lazily
   // via the closure — only read it when the user actually fires.
@@ -373,9 +381,31 @@ function ArenaForMatch({
         {match.status === 'live'
           ? 'Live · updates from referee console'
           : match.status === 'final'
-            ? 'Final · scores shown above'
+            ? 'Ended · scores shown above'
             : 'Scheduled · arena lights up when the ref starts the clock'}
       </p>
+
+      {/* Referee line — resolves match.refereeUids to display names so
+          viewers know who's officiating. Always shown when any ref is
+          assigned; placeholder count when uids can't be resolved
+          (e.g. account deleted). */}
+      {(() => {
+        const refs = (match.refereeUids ?? [])
+          .map((uid) => peopleByUid.get(uid))
+          .filter((n): n is string => !!n);
+        if (refs.length === 0 && (match.refereeUids?.length ?? 0) === 0) {
+          return null;
+        }
+        const label =
+          refs.length === 0
+            ? `Ref · ${match.refereeUids!.length} assigned`
+            : `Ref · ${refs.join(', ')}`;
+        return (
+          <p className="mx-5 mt-1 text-center font-mono text-[10px] uppercase tracking-[0.08em] text-ink-dim">
+            {label}
+          </p>
+        );
+      })()}
 
       {canEndMatch && (
         <div className="mx-5 mt-4 flex flex-col gap-2">

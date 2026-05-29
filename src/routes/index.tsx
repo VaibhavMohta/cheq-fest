@@ -8,6 +8,7 @@ import { IconButton } from '@/components/shared/IconButton';
 import { InstallPrompt } from '@/components/shared/InstallPrompt';
 import { MenuIcon } from '@/components/shared/icons';
 import { useActiveEvent } from '@/lib/activeEvent';
+import { useAllEventPlayers } from '@/lib/playerDirectory';
 import { matchesCol, sportsCol, teamsCol } from '@/lib/db';
 import type { Timestamp } from 'firebase/firestore';
 import type { MatchDoc } from '@/types/match';
@@ -22,6 +23,17 @@ type MatchWithId = MatchDoc & { id: string };
 function HomeScreen() {
   const { activeEventId } = useActiveEvent();
   const { matches, sports, teams } = useHomeData(activeEventId);
+  const { people } = useAllEventPlayers();
+
+  // uid → name lookup so MatchCard can render assigned-referee names
+  // ("Ref: Joe, Sam") on every card it shows.
+  const peopleByUid = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of people) {
+      if (p.uid) m.set(p.uid, p.name);
+    }
+    return m;
+  }, [people]);
 
   // Live = status 'live'. Today = scheduled to start within today's
   // calendar window (00:00 → 23:59 local) AND not yet final. Recent =
@@ -87,7 +99,13 @@ function HomeScreen() {
           <ul className="mx-5 flex flex-col gap-2">
             {live.map((m) => (
               <li key={m.id}>
-                <MatchCard match={m} sports={sports} teams={teams} live />
+                <MatchCard
+                  match={m}
+                  sports={sports}
+                  teams={teams}
+                  peopleByUid={peopleByUid}
+                  live
+                />
               </li>
             ))}
           </ul>
@@ -103,7 +121,12 @@ function HomeScreen() {
           <ul className="mx-5 flex flex-col gap-2">
             {today.map((m) => (
               <li key={m.id}>
-                <MatchCard match={m} sports={sports} teams={teams} />
+                <MatchCard
+                  match={m}
+                  sports={sports}
+                  teams={teams}
+                  peopleByUid={peopleByUid}
+                />
               </li>
             ))}
           </ul>
@@ -125,7 +148,13 @@ function HomeScreen() {
           <ul className="mx-5 flex flex-col gap-2">
             {recent.map((m) => (
               <li key={m.id}>
-                <MatchCard match={m} sports={sports} teams={teams} final />
+                <MatchCard
+                  match={m}
+                  sports={sports}
+                  teams={teams}
+                  peopleByUid={peopleByUid}
+                  final
+                />
               </li>
             ))}
           </ul>
@@ -427,18 +456,35 @@ function MatchCard({
   match,
   sports,
   teams,
+  peopleByUid,
   live = false,
   final = false,
 }: {
   match: MatchWithId;
   sports: Map<string, string>;
   teams: Map<string, TeamLite>;
+  /** uid → display name lookup. Used to render the assigned-referee
+   *  line under each match card. Pass an empty map to suppress. */
+  peopleByUid: Map<string, string>;
   live?: boolean;
   final?: boolean;
 }) {
   const sportName = sports.get(match.sportId) ?? match.sportId;
   const a = teams.get(match.teamAId);
   const b = teams.get(match.teamBId);
+
+  // Resolve referee uids to display names. Unknown uids (deleted user
+  // or staged-only ref) render as a generic "Referee" placeholder so
+  // a missing entry doesn't break the line.
+  const refereeNames = (match.refereeUids ?? [])
+    .map((uid) => peopleByUid.get(uid) ?? null)
+    .filter((n): n is string => !!n);
+  const refereeLabel =
+    refereeNames.length === 0
+      ? (match.refereeUids?.length ?? 0) > 0
+        ? `Ref · ${match.refereeUids!.length} assigned`
+        : null
+      : `Ref · ${refereeNames.join(', ')}`;
   const showScore = live || final;
   // Status pill copy / color. Live in lava-orange, Final in lime, else
   // the scheduled start time in muted ink.
@@ -512,6 +558,13 @@ function MatchCard({
       {!final && match.venue && (
         <p className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
           {match.venue}
+        </p>
+      )}
+      {/* Referee line — always shown when any ref is assigned. Kept
+          on its own line so the venue line above stays compact. */}
+      {refereeLabel && (
+        <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-mute">
+          {refereeLabel}
         </p>
       )}
     </div>
